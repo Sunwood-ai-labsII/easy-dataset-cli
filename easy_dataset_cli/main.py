@@ -13,7 +13,10 @@ from .core import (
     parse_ga_file,
     generate_qa_for_chunk_with_ga,
     convert_to_xml_by_genre,
-    generate_ga_definitions
+    generate_ga_definitions,
+    parse_ga_definitions_from_xml,
+    save_ga_definitions_by_genre,
+    create_output_directories
 )
 
 # .envファイルを読み込む
@@ -37,29 +40,64 @@ def create_ga(
         exists=True, dir_okay=False, readable=True,
         help="GAペアの定義を生成するための元のテキストファイル。"
     )],
-    output_path: Annotated[Path, typer.Option(
-        "--output", "-o", writable=True,
-        help="生成されたGAペア定義（Markdown）を保存するファイルパス。"
+    output_dir: Annotated[Path, typer.Option(
+        "--output-dir", "-o", file_okay=False, dir_okay=True, writable=True,
+        help="生成されたGAペア定義ファイルを保存するディレクトリ。"
     )],
     model: Annotated[str, typer.Option(
         "--model", "-m",
         help="GAペア定義の生成に使用するLLMモデル名。"
     )] = "openrouter/openai/gpt-4o",
+    num_ga_pairs: Annotated[int, typer.Option(
+        "--num-ga-pairs", "-g",
+        help="生成するGAペアの数。指定しない場合はLLMが適切な数を決定します。"
+    )] = None,
 ):
-    """元の文章を分析し、GAペア定義のMarkdownファイルを生成します。"""
+    """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
     console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
 
     try:
         text = file_path.read_text(encoding="utf-8")
+        console.print(f"[dim]読み込んだテキスト長: {len(text)} 文字[/dim]")
 
-        with console.status("[bold green]LLMに最適なGAペアを提案させています..."):
-            markdown_content = generate_ga_definitions(text, model=model)
+        console.print("[bold green]LLMに最適なGAペアを提案させています...[/bold green]")
+        xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs)
 
-        output_path.write_text(markdown_content, encoding="utf-8")
+        # 出力ディレクトリ構造を作成
+        dirs = create_output_directories(output_dir)
+        console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
+        
+        # LLMのrawレスポンスをlogsディレクトリに保存
+        raw_file_path = dirs["logs"] / "raw.md"
+        raw_file_path.write_text(xml_content, encoding="utf-8")
+        console.print(f"[green]✓[/green] LLMのrawレスポンスを保存しました: [cyan]{raw_file_path}[/cyan]")
+
+        console.print("[bold green]XMLからGAペアを解析しています...[/bold green]")
+        # XMLからGAペアを解析
+        ga_pairs = parse_ga_definitions_from_xml(xml_content)
+        
+        if not ga_pairs:
+            console.print("[bold red]有効なGAペアが生成されませんでした。[/bold red]")
+            console.print("[yellow]生成されたXMLの内容を確認してください:[/yellow]")
+            console.print(xml_content)
+            raise typer.Exit(code=1)
+
+        # 元のXMLファイルをgaディレクトリに保存（クリーンなXMLのみ）
+        xml_file_path = dirs["ga"] / "ga_definitions.xml"
+        # XMLタグ部分のみを抽出して保存
+        xml_start = xml_content.find("<GADefinitions>")
+        xml_end = xml_content.rfind("</GADefinitions>")
+        if xml_start != -1 and xml_end != -1:
+            clean_xml = xml_content[xml_start: xml_end + len("</GADefinitions>")]
+            xml_file_path.write_text(clean_xml, encoding="utf-8")
+            console.print(f"[green]✓[/green] GA定義XMLファイルを保存しました: [cyan]{xml_file_path}[/cyan]")
+
+        # Genreごとにマークダウンファイルをgaディレクトリに保存
+        save_ga_definitions_by_genre(ga_pairs, dirs["ga"])
 
         console.print(
-            f"\n[bold green]✓[/bold green] GAペア定義ファイルを "
-            f"[cyan]{output_path}[/cyan] に正常に保存しました。"
+            f"\n[bold green]✓[/bold green] {len(ga_pairs)}個のGAペアを "
+            f"[cyan]{dirs['ga']}[/cyan] に保存しました。"
         )
         console.print(
             "[yellow]ヒント: 生成されたファイルをレビューし、必要に応じて編集してから "
@@ -81,7 +119,7 @@ def generate(
     )],
     ga_file: Annotated[Path, typer.Option(
         "--ga-file", "-g", exists=True, dir_okay=False, readable=True,
-        help="Genre-Audienceペアを定義したMarkdownファイルへのパス。"
+        help="Genre-Audienceペアを定義したXMLまたはMarkdownファイルへのパス。gaディレクトリのga_definitions.xmlを推奨。"
     )],
     output_dir: Annotated[Path, typer.Option(
         "--output-dir", "-o", file_okay=False, dir_okay=True, writable=True,
@@ -97,6 +135,10 @@ def generate(
     chunk_overlap: Annotated[int, typer.Option(
         help="チャンク間のオーバーラップサイズ。"
     )] = 200,
+    num_qa_pairs: Annotated[int, typer.Option(
+        "--num-qa-pairs", "-q",
+        help="各チャンク・GAペアの組み合わせで生成するQ&Aペアの数。指定しない場合はLLMが適切な数を決定します。"
+    )] = None,
 ):
     """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。"""
     try:
@@ -118,6 +160,12 @@ def generate(
 
         all_qa_pairs_with_ga = []
         total_tasks = len(chunks) * len(ga_pairs)
+        
+        # 出力ディレクトリがある場合は構造を作成
+        dirs = None
+        if output_dir:
+            dirs = create_output_directories(output_dir)
+            console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
 
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
@@ -125,7 +173,9 @@ def generate(
             for chunk in chunks:
                 for ga_pair in ga_pairs:
                     qa_pairs = generate_qa_for_chunk_with_ga(
-                        chunk, model=model, ga_pair=ga_pair
+                        chunk, model=model, ga_pair=ga_pair, 
+                        logs_dir=dirs["logs"] if dirs else None,
+                        num_qa_pairs=num_qa_pairs
                     )
 
                     for pair in qa_pairs:
@@ -148,13 +198,12 @@ def generate(
 
         xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga)
 
-        if output_dir:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            console.print(f"XMLファイルを [cyan]{output_dir}[/cyan] に保存しています...")
+        if dirs:
+            console.print(f"XMLファイルを [cyan]{dirs['qa']}[/cyan] に保存しています...")
 
             for genre, xml_content in xml_outputs_by_genre.items():
                 safe_genre_name = sanitize_filename(genre)
-                output_file_path = output_dir / f"{safe_genre_name}.xml"
+                output_file_path = dirs["qa"] / f"{safe_genre_name}.xml"
                 output_file_path.write_text(xml_content, encoding="utf-8")
                 console.print(f"  - [green]✓[/green] {output_file_path.name}")
 
