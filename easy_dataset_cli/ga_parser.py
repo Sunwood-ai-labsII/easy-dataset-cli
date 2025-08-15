@@ -172,7 +172,7 @@ def parse_ga_definitions_from_xml(xml_content: str) -> List[Dict[str, Dict[str, 
         console.print(f"[dim]問題のあるXML: {xml_content[xml_start:xml_start+200] if xml_start != -1 else xml_content[:200]}...[/dim]")
 
         # XMLエラーの場合、手動でテキスト解析を試行
-        console.print("[yellow]手動解析を試行中...[/yellow]")
+        console.print("[yellow]自動解析を試行中...[/yellow]")
         from .xml_utils import parse_ga_from_text_fallback
         pairs = parse_ga_from_text_fallback(xml_content)
 

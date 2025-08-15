@@ -41,10 +41,10 @@ def parse_ga_from_text_fallback(content: str) -> List[Dict[str, Dict[str, str]]]
                         "description": audience_desc.strip()
                     }
                 })
-                console.print(f"[green]✓[/green] (手動解析) {genre_title} x {audience_title}")
+                console.print(f"[green]✓[/green] (自動解析) {genre_title} x {audience_title}")
 
     except Exception as e:
-        console.print(f"[red]手動解析も失敗:[/red] {e}")
+        console.print(f"[red]自動解析も失敗:[/red] {e}")
 
     return pairs
 
@@ -97,10 +97,10 @@ def parse_qa_from_text_fallback(content: str) -> List[Dict[str, str]]:
                     "question": question.strip(),
                     "answer": answer.strip()
                 })
-                console.print("[green]✓[/green] (手動解析) Q&A追加")
+                console.print("[green]✓[/green] (自動解析) Q&A追加")
 
     except Exception as e:
-        console.print(f"[red]Q&A手動解析も失敗:[/red] {e}")
+        console.print(f"[red]Q&A自動解析も失敗:[/red] {e}")
 
     return qa_pairs
 
