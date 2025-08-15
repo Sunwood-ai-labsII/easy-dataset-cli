@@ -1,267 +1,152 @@
+# Easy Dataset CLI
 
-![](https://github.com/user-attachments/assets/e8fe7c3c-a8d8-4165-86a1-86b9f433f9b3)
+テキストファイルからQ&Aペアを生成するシンプルなCLIツールです。LLMを使用してGenre-Audienceペアに基づいた多様なQ&Aデータセットを作成し、Genre別のXMLファイルとして出力します。
 
-<div align="center">
+## 特徴
 
-# Daily Report Hub Template
+- **シンプル**: データベース不要、マークダウンでGA定義
+- **柔軟**: 複数のGenre-Audienceペアに対応
+- **安定**: LLMからの直接XML出力で信頼性向上
+- **効率的**: テキスト分割とバッチ処理で大きなファイルにも対応
 
-<img src="https://img.shields.io/badge/GitHub%20Actions-CICD-blue?style=for-the-badge&logo=github-actions&logoColor=white" alt="GitHub Actions" />
-<img src="https://img.shields.io/badge/Bash-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Bash" />
-<a href="https://github.com/Sunwood-ai-labsII/daily-report-hub">
-  <img src="https://img.shields.io/badge/daily--report--hub-PANDA-00D4AA?style=for-the-badge&logo=github&logoColor=white" alt="daily-report-hub PANDA" />
-</a>
+## インストール
 
-</div>
+```bash
+# 仮想環境の作成（推奨）
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# または
+venv\Scripts\activate     # Windows
 
-
----
-
-## 📖 概要
-
-このリポジトリは、**Daily Report Hubのテンプレートリポジトリ**です。このテンプレートからリポジトリを作成すると、自動で日報生成・同期機能が有効になります。
-
-### 🎯 主な用途
-- 日報自動生成機能を必要とするプロジェクトのテンプレート
-- 集約用リポジトリ（daily-report-hub）への自動同期
-- GitHub Actionsによる完全自動化されたレポート生成
-
-### 🔄 運用方式
-このテンプレートから作成されたリポジトリは、daily-report-hub本体のワークフローから**リモート実行**されるスクリプトを使用して日報を生成・同期します。
-
----
-
-## 🚩 このテンプレートの役割
-
-### 🛠️ テンプレートとしての機能
-- **自動セットアップ**: 日報生成機能の自動有効化
-- **ワークフロー提供**: GitHub Actionsワークフローの自動適用
-- **同期機能**: 集約用リポジトリへの自動同期機能
-- **カスタマイズ**: 必要に応じた設定変更の容易性
-
-### 📦 提供される機能
-- Gitのコミット履歴・差分から日報（Markdown形式）を自動生成
-- 週単位・日単位でレポートを整理
-- 別リポジトリ（daily-report-hub）へPRベースで自動同期
-- プルリクエストの自動承認・自動マージ（設定可）
-- Docusaurus用のディレクトリ・ナビゲーション構造も自動生成
-
----
-
-## ⚙️ ワークフロー概要
-
-### 🔄 自動化フロー図
-
-```mermaid
-graph TB
-    A[開発者のコード<br/>commit/push] --> B[GitHub Actions<br/>ワークフロー]
-    B --> C[レポート生成<br/>Markdown]
-    C --> D[ファイル同期<br/>クローン]
-    D --> E[PR作成・承認<br/>自動化可]
-    E --> F[集約リポジトリ<br/>daily-report-hub]
+# 依存関係のインストール
+pip install -e .
 ```
 
-### 📋 処理ステップ
+## 使用方法
 
-1. **トリガー**: **GitHub Actions**がmainブランチへのpushやPRをトリガー
-2. **データ収集**: リモートスクリプトで
-   - 週情報の計算
-   - Git活動の分析
-   - Markdownレポートの生成
-   - Docusaurus用ディレクトリ構造の作成
-3. **同期処理**: 集約用リポジトリ（daily-report-hub）をクローンし、レポートをコピー
-4. **PR処理**: PR作成・自動承認・自動マージ（設定に応じて自動化）
+### 新しいワークフロー（推奨）
 
-### ⚙️ 設定可能なオプション
+1. **GAペア定義ファイルの自動生成**
+```bash
+# 環境変数にAPIキーを設定
+export OPENAI_API_KEY="your-api-key-here"
 
-| 設定 | 説明 | デフォルト値 |
-|------|------|-------------|
-| `WEEK_START_DAY` | 週の開始曜日（0=日曜日, 1=月曜日, ...） | `1`（月曜日） |
-| `AUTO_APPROVE` | PR自動承認 | `true` |
-| `AUTO_MERGE` | PR自動マージ | `true` |
-| `CREATE_PR` | PR作成/直接プッシュ切り替え | `true` |
-
----
-
-## 📝 主な機能
-
-> [!NOTE]
-> このテンプレートから作成されたリポジトリでは、以下の機能が自動で有効になります。
-
-### 🔄 自動実行されるスクリプト（リモート）
-
-- **週情報計算**
-  週情報（週番号・開始日・終了日など）を計算し環境変数に出力
-
-- **Git活動分析**
-  Gitのコミット履歴・差分を分析し、生データファイルを生成
-
-- **Markdownレポート生成**
-  生データから日報・統計・差分などのMarkdownレポートを自動生成
-
-- **Docusaurus構造作成**
-  Docusaurus用のディレクトリ・_category_.jsonを自動生成
-
-- **同期処理**
-  集約リポジトリへPR作成・自動承認・自動マージ
-
----
-
-## 🚀 使い方（クイックスタート）
-
-### 📝 テンプレートからリポジトリを作成する方法
-
-> [!TIP]
-> このテンプレートから新しいリポジトリを作成すると、日報生成機能が自動で有効になります。
-
-1. **このリポジトリをテンプレートとして使用**
-   - リポジトリトップページの「Use this template」ボタンをクリック
-   - リポジトリ名を入力して「Create repository from template」をクリック
-
-2. **必要なシークレットを設定**
-   - 作成したリポジトリの「Settings」→「Secrets and variables」→「Actions」に移動
-   - 必要なシークレットを設定（下記参照）
-
-3. **自動で日報生成が開始**
-   - mainブランチにpushすると自動で日報生成＆集約リポジトリへ同期
-
-### 🌐 ワークフローの実際の動作
-
-> [!IMPORTANT]
-> 作成されたリポジトリでは、以下のワークフローが自動で実行されます：
-
-```yaml
-name: 📊 デイリーレポートハブ同期 v2.3 (YUKIHIKO PR版 - 完全リモート実行)
-on:
-  push:
-    branches: [main, master]
-  pull_request:
-    types: [opened, synchronize, closed]
-
-env:
-  WEEK_START_DAY: 1
-  AUTO_APPROVE: true
-  AUTO_MERGE: true
-  CREATE_PR: true
-  # リモートスクリプトの設定
-  SCRIPTS_BASE_URL: https://raw.githubusercontent.com/Sunwood-ai-labsII/daily-report-hub_dev/main/.github/scripts
-
-jobs:
-  sync-data:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 現在のリポジトリをチェックアウト
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 📅 週情報を計算
-        run: curl -LsSf ${SCRIPTS_BASE_URL}/calculate-week-info.sh | sh -s -- ${{ env.WEEK_START_DAY }}
-
-      - name: 🔍 Git活動を分析
-        run: curl -LsSf ${SCRIPTS_BASE_URL}/analyze-git-activity.sh | sh
-
-      - name: 📝 Markdownレポートを生成
-        run: curl -LsSf ${SCRIPTS_BASE_URL}/generate-markdown-reports.sh | sh
-
-      - name: 📂 レポートハブをクローン
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-          REPORT_HUB_REPO: ${{ vars.REPORT_HUB_REPO || 'Sunwood-ai-labsII/daily-report-hub' }}
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${REPORT_HUB_REPO}.git daily-report-hub
-
-      - name: 🏗️ Docusaurus構造を作成
-        run: curl -LsSf ${SCRIPTS_BASE_URL}/create-docusaurus-structure.sh | sh
-
-      - name: 🚀 YUKIHIKO権限でPR作成＆自動承認
-        env:
-          GITHUB_TOKEN_ORIGINAL: ${{ secrets.GH_PAT }}      # 承認用
-          YUKIHIKO_TOKEN: ${{ secrets.GH_PAT_YUKIHIKO }}     # PR作成用
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}              # デフォルト
-          REPORT_HUB_REPO: ${{ vars.REPORT_HUB_REPO || 'Sunwood-ai-labsII/daily-report-hub' }}
-        run: curl -LsSf ${SCRIPTS_BASE_URL}/sync-to-hub-gh.sh | sh
+# 元の文章からGAペア定義を自動生成
+easy-dataset create-ga sample_document.txt --output ga-definitions.md
 ```
 
-### 🔑 環境変数・シークレット設定
-
-> [!WARNING]
-> 以下のシークレットを設定しないと、日報同期機能が正常に動作しません。
-
-#### 必須シークレット
-- `GH_PAT`: GitHub Personal Access Token（リポジトリアクセス用）
-- `GH_PAT_YUKIHIKO`: YUKIHIKO権限用のToken（PR作成・承認用）
-
-#### オプション環境変数（ワークフロー内で設定）
-- `REPORT_HUB_REPO`: レポートハブリポジトリ（デフォルト: `Sunwood-ai-labsII/daily-report-hub`）
-- `WEEK_START_DAY`: 週の開始曜日（0=日曜日, 1=月曜日, ..., 6=土曜日、デフォルト: 1）
-- `AUTO_APPROVE`: PR自動承認（true/false、デフォルト: true）
-- `AUTO_MERGE`: PR自動マージ（true/false、デフォルト: true）
-- `CREATE_PR`: PR作成フラグ（true=PR作成, false=直接プッシュ、デフォルト: true）
-
-#### 環境変数設定例
-各環境変数の詳細な設定は、ワークフローファイル内のコメントを参照してください。
-
-### 📋 シークレット設定手順
-
-> [!CAUTION]
-> シークレットの漏洩には注意してください。GitHubリポジトリ内に直接記述しないでください。
-
-1. リポジトリの「Settings」→「Secrets and variables」→「Actions」に移動
-2. 「New repository secret」をクリックして各シークレットを追加
-3. 以下のシークレットを設定：
-   - `GH_PAT`: `repo`スコープを持つPersonal Access Token
-   - `GH_PAT_YUKIHIKO`: `repo`スコープを持つPersonal Access Token（YUKIHIKO権限用）
-
----
-
-## 📁 ディレクトリ構成例
-
-> [!NOTE]
-> このテンプレートから作成されたリポジトリの基本的な構成です。
-
-```
-.
-├── .github/
-│   └── workflows/
-│       └── sync-to-report-gh.yml
-├── .gitignore
-├── LICENSE
-├── README.md
-└── [プロジェクト固有のファイル]
+2. **（任意）生成されたGA定義のレビュー・編集**
+```bash
+# テキストエディタで内容を確認・修正
+notepad ga-definitions.md  # Windows
+# または
+nano ga-definitions.md     # Linux/macOS
 ```
 
+3. **Q&Aペアの生成**
+```bash
+# GAペア定義を使ってQ&Aペアを生成
+easy-dataset generate sample_document.txt --ga-file ga-definitions.md --output-dir ./results
+```
+
+### 従来の方法（手動でGA定義を作成）
+
+```bash
+# 手動で作成したGA定義ファイルを使用
+easy-dataset generate sample_document.txt --ga-file sample_ga_definition.md --output-dir ./results
+```
+
+### コマンドオプション
+
+#### create-ga コマンド
+```bash
+easy-dataset create-ga [OPTIONS] FILE_PATH
+
+Arguments:
+  FILE_PATH  GAペアの定義を生成するための元のテキストファイル
+
+Options:
+  -o, --output PATH    生成されたGAペア定義を保存するファイルパス [required]
+  -m, --model TEXT     GAペア定義の生成に使用するLLMモデル [default: gpt-4o]
+  -h, --help           ヘルプを表示
+```
+
+#### generate コマンド
+```bash
+easy-dataset generate [OPTIONS] FILE_PATH
+
+Arguments:
+  FILE_PATH  元のテキストファイルへのパス
+
+Options:
+  -g, --ga-file PATH        Genre-Audienceペアを定義したMarkdownファイル [required]
+  -o, --output-dir PATH     XMLファイルの出力ディレクトリ（省略時はコンソール出力）
+  -m, --model TEXT          Q&Aペアの生成に使用するLLMモデル [default: gpt-4o]
+  --chunk-size INTEGER      テキストチャンクの最大サイズ [default: 2000]
+  --chunk-overlap INTEGER   チャンク間のオーバーラップサイズ [default: 200]
+  -h, --help                ヘルプを表示
+```
+
+## GA定義ファイルの形式
+
+Genre-Audienceペアをマークダウン形式で定義します：
+
+```markdown
+# Genre: 学術論文
+学術的で厳密な表現を用い、専門用語を正確に使用し、論理的で客観的な回答を提供します。
+
+# Audience: 大学生
+大学レベルの知識を持つ学習者向けに、基礎概念から応用まで段階的に説明します。
+
 ---
 
-## 🛠️ 設定・カスタマイズ
+# Genre: 技術ブログ
+実践的で親しみやすい表現を用い、具体例やコード例を交えて説明します。
 
-> [!TIP]
-> 必要に応じてワークフローファイルをカスタマイズできます。
+# Audience: エンジニア
+実務経験のある開発者向けに、実装の詳細や最適化のポイントを重視した内容を提供します。
+```
 
-- `.github/workflows/sync-to-report-gh.yml`
-  - `WEEK_START_DAY`：週の開始曜日（0=日, 1=月, ...）
-  - `AUTO_APPROVE`：PR自動承認
-  - `AUTO_MERGE`：PR自動マージ
-  - `CREATE_PR`：PR作成/直接push切替
+## 出力形式
 
-- リモートスクリプトの詳細は開発リポジトリを参照
+各GenreごとにXMLファイルが生成されます：
 
----
+```xml
+<?xml version="1.0" ?>
+<QAPairs genre="学術論文">
+  <Pair>
+    <Audience>大学生</Audience>
+    <Question>Pythonの設計哲学における主要な特徴は何ですか？</Question>
+    <Answer>Pythonの設計哲学は「読みやすさ」を重視しており、シンプルで理解しやすい構文が特徴です。</Answer>
+  </Pair>
+</QAPairs>
+```
 
-## 🔗 参考リンク
+## サポートするLLMモデル
 
-- [集約用日報ハブリポジトリ](https://github.com/Sunwood-ai-labsII/daily-report-hub)
-- [開発リポジトリ（スクリプトソース）](https://github.com/Sunwood-ai-labsII/daily-report-hub_dev)
-- [GitHub Actions公式ドキュメント](https://docs.github.com/ja/actions)
-- [Docusaurus公式サイト](https://docusaurus.io/ja/)
+### OpenAI（直接）
+```bash
+export OPENAI_API_KEY="sk-..."
+easy-dataset generate document.txt -g ga.md -m gpt-4o
+```
 
----
+### OpenRouter経由
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+easy-dataset generate document.txt -g ga.md -m gpt-4o  # 自動でopenai/gpt-4oに変換
+easy-dataset generate document.txt -g ga.md -m claude-3-sonnet  # 自動でanthropic/claude-3-sonnetに変換
+```
 
-## 📝 ライセンス
+### その他のプロバイダー
+- Anthropic: `claude-3-opus`, `claude-3-sonnet`, `claude-3-haiku`
+- Ollama: `ollama/llama3`, `ollama/mistral`
+- その他litellmがサポートするすべてのモデル
 
-このテンプレートは [LICENSE](LICENSE) に基づいて提供されています。
+### 推奨モデル
+- **高品質**: `gpt-4o`, `claude-3-opus`
+- **バランス**: `gpt-4`, `claude-3-sonnet`
+- **高速**: `gpt-3.5-turbo`, `claude-3-haiku`
 
----
+## ライセンス
 
-© 2025 Sunwood-ai-labsII
+MIT License
