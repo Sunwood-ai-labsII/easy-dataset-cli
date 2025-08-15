@@ -286,7 +286,12 @@ def generate(
                 console.print(xml_content, overflow="fold")
     
     except Exception as e:
-        console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
+        console.print(f"[bold red]エラーが発生しました:[/bold red]")
+        console.print(f"[bold red]エラータイプ:[/bold red] {type(e).__name__}")
+        console.print(f"[bold red]エラーメッセージ:[/bold red] {str(e)}")
+        console.print(f"[bold red]トレースバック:[/bold red]")
+        import traceback
+        console.print(traceback.format_exc())
         raise typer.Exit(code=1)
 
 
