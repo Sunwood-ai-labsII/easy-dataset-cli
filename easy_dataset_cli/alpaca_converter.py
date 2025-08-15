@@ -77,11 +77,12 @@ def convert_all_xml_to_alpaca(qa_dir: Path, output_file: Path) -> List[Dict[str,
     return all_alpaca_data
 
 def upload_to_huggingface(
-    dataset_data: List[Dict[str, str]], 
-    repo_name: str, 
+    dataset_data: List[Dict[str, str]],
+    repo_name: str,
     hf_token: Optional[str] = None,
     private: bool = False,
-    commit_message: str = "Upload alpaca dataset"
+    commit_message: str = "Upload alpaca dataset",
+    readme_file: Optional[Path] = None
 ) -> bool:
     """Hugging Face Hubにデータセットをアップロード"""
     
@@ -119,6 +120,21 @@ def upload_to_huggingface(
             commit_message=commit_message,
             private=private
         )
+        
+        # README.mdが指定されている場合はアップロード
+        if readme_file and readme_file.exists():
+            try:
+                api.upload_file(
+                    path_or_fileobj=readme_file,
+                    path_in_repo="README.md",
+                    repo_id=repo_name,
+                    repo_type="dataset",
+                    commit_message=f"Update README.md",
+                    token=hf_token
+                )
+                console.print(f"[green]✓[/green] README.mdをアップロードしました!")
+            except Exception as readme_error:
+                console.print(f"[yellow]README.mdアップロードの警告: {readme_error}[/yellow]")
         
         console.print(f"[bold green]✓[/bold green] データセットをアップロードしました!")
         console.print(f"[cyan]https://huggingface.co/datasets/{repo_name}[/cyan]")

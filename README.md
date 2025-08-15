@@ -1,5 +1,7 @@
 <div align="center">
 
+![](https://github.com/user-attachments/assets/865632a4-911f-4de4-867d-c65cef365d79)
+
 # 🚀 Easy Dataset CLI
 
 <p align="center">
@@ -323,3 +325,14 @@ size_categories:
 ## 📜 ライセンス
 
 MIT License
+
+## 🔗 参考情報
+
+本プロジェクトは以下のOSSと論文を参考に開発されています：
+
+### 📦 参考OSS
+- **[Easy Dataset](https://github.com/ConardLi/easy-dataset)**
+
+### 📄 参考論文
+- **[Dataset Generation for Instruction Tuning](https://arxiv.org/html/2507.04009v1)**
+

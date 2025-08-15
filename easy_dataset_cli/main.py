@@ -274,7 +274,8 @@ def generate(
                             repo_name=hf_repo_name,
                             hf_token=hf_token if hf_token else None,
                             private=hf_private,
-                            commit_message=f"Upload QA dataset with {len(alpaca_data)} entries"
+                            commit_message=f"Upload QA dataset with {len(alpaca_data)} entries",
+                            readme_file=readme_file
                         )
                         if not success:
                             console.print("[bold red]Hugging Faceアップロードに失敗しました[/bold red]")
@@ -349,7 +350,8 @@ def convert_to_alpaca(
                 repo_name=hf_repo_name,
                 hf_token=hf_token if hf_token else None,
                 private=hf_private,
-                commit_message=f"Upload converted QA dataset with {len(alpaca_data)} entries"
+                commit_message=f"Upload converted QA dataset with {len(alpaca_data)} entries",
+                readme_file=readme_file
             )
             
             if not success:
