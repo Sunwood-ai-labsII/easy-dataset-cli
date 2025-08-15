@@ -18,6 +18,11 @@ from .file_utils import (
     save_ga_definitions_by_genre,
     sanitize_filename
 )
+from .alpaca_converter import (
+    convert_all_xml_to_alpaca,
+    upload_to_huggingface,
+    create_dataset_card
+)
 
 # 後方互換性のため、すべての関数を再エクスポート
 __all__ = [
@@ -39,5 +44,10 @@ __all__ = [
     # ファイル操作
     'create_output_directories',
     'save_ga_definitions_by_genre',
-    'sanitize_filename'
+    'sanitize_filename',
+    
+    # アルパカ変換・アップロード
+    'convert_all_xml_to_alpaca',
+    'upload_to_huggingface',
+    'create_dataset_card'
 ]
