@@ -208,3 +208,4 @@ __marimo__/
 .SourceSageAssets/
 uv.lock
 example/output/structured/logs/
+example/output/
