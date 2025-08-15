@@ -12,7 +12,7 @@ from .qa_generator import (
     generate_ga_definitions
 )
 from .text_splitter import split_text
-from .xml_utils import convert_to_xml_by_genre
+from .xml_utils import convert_to_xml_by_genre, load_existing_xml_file, aggregate_logs_xml_to_qa
 from .file_utils import (
     create_output_directories,
     save_ga_definitions_by_genre,
@@ -40,6 +40,8 @@ __all__ = [
     
     # XML処理
     'convert_to_xml_by_genre',
+    'load_existing_xml_file',
+    'aggregate_logs_xml_to_qa',
     
     # ファイル操作
     'create_output_directories',

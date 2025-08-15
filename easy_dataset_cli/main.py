@@ -143,6 +143,10 @@ def generate(
         "--use-fulltext", "-f",
         help="全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。"
     )] = False,
+    append_mode: Annotated[bool, typer.Option(
+        "--append", "-A",
+        help="既存のXMLファイルに新しいQ&Aを追加します。指定しない場合は上書きします。"
+    )] = False,
     export_alpaca: Annotated[bool, typer.Option(
         "--export-alpaca", "-a",
         help="生成されたQ&AペアをAlpaca形式のJSONファイルとして出力します。"
@@ -239,7 +243,7 @@ def generate(
             "個のQ&Aペアを生成しました。"
         )
 
-        xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga)
+        xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga, dirs["qa"] if dirs else None, append_mode)
 
         if dirs:
             console.print(f"XMLファイルを [cyan]{dirs['qa']}[/cyan] に保存しています...")
@@ -367,6 +371,37 @@ def convert_to_alpaca(
         
     except Exception as e:
         console.print(f"[bold red]変換中にエラーが発生しました:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def aggregate_logs(
+    output_dir: Annotated[Path, typer.Argument(
+        exists=True, dir_okay=True, readable=True,
+        help="logsフォルダが含まれる出力ディレクトリへのパス。"
+    )]
+):
+    """logsフォルダ内のタイムスタンプ付きXMLファイルを集約してqaフォルダのXMLを生成します。"""
+    
+    try:
+        logs_dir = output_dir / "logs"
+        qa_dir = output_dir / "qa"
+        
+        if not logs_dir.exists():
+            console.print(f"[bold red]logsフォルダが見つかりません: {logs_dir}[/bold red]")
+            raise typer.Exit(code=1)
+        
+        console.print(f"logsフォルダ: [cyan]{logs_dir}[/cyan]")
+        console.print(f"出力先qaフォルダ: [cyan]{qa_dir}[/cyan]")
+        
+        # XMLファイルを集約してqaフォルダに生成
+        from easy_dataset_cli.core import aggregate_logs_xml_to_qa
+        aggregate_logs_xml_to_qa(logs_dir, qa_dir)
+        
+        console.print(f"\n[bold green]✓[/bold green] 集約が完了しました！")
+        
+    except Exception as e:
+        console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
