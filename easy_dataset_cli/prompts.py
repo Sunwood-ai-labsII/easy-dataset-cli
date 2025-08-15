@@ -20,6 +20,11 @@ def get_qa_generation_prompt() -> str:
     return load_prompt_template("qa_generation")
 
 
+def get_qa_generation_with_fulltext_prompt() -> str:
+    """全文+チャンク対応Q&A生成プロンプトを取得"""
+    return load_prompt_template("qa_generation_with_fulltext")
+
+
 def get_ga_definition_generation_prompt() -> str:
     """GA定義生成プロンプトを取得"""
     return load_prompt_template("ga_definition_generation")

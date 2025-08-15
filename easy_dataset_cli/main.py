@@ -12,11 +12,13 @@ from .core import (
     split_text,
     parse_ga_file,
     generate_qa_for_chunk_with_ga,
+    generate_qa_for_chunk_with_ga_and_fulltext,
     convert_to_xml_by_genre,
     generate_ga_definitions,
     parse_ga_definitions_from_xml,
     save_ga_definitions_by_genre,
-    create_output_directories
+    create_output_directories,
+    sanitize_filename
 )
 
 # .envファイルを読み込む
@@ -27,11 +29,6 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]}
 )
 console = Console()
-
-
-def sanitize_filename(name: str) -> str:
-    """ファイル名として安全な文字列に変換する"""
-    return "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).rstrip()
 
 
 @app.command()
@@ -47,11 +44,11 @@ def create_ga(
     model: Annotated[str, typer.Option(
         "--model", "-m",
         help="GAペア定義の生成に使用するLLMモデル名。"
-    )] = "openrouter/openai/gpt-4o",
+    )] = "openrouter/openai/gpt-oss-120b",
     num_ga_pairs: Annotated[int, typer.Option(
         "--num-ga-pairs", "-g",
         help="生成するGAペアの数。指定しない場合はLLMが適切な数を決定します。"
-    )] = None,
+    )] = 5,
 ):
     """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
     console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
@@ -138,9 +135,17 @@ def generate(
     num_qa_pairs: Annotated[int, typer.Option(
         "--num-qa-pairs", "-q",
         help="各チャンク・GAペアの組み合わせで生成するQ&Aペアの数。指定しない場合はLLMが適切な数を決定します。"
-    )] = None,
+    )] = 10,
+    use_fulltext: Annotated[bool, typer.Option(
+        "--use-fulltext", "-f",
+        help="全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。"
+    )] = False,
 ):
-    """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。"""
+    """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。
+    
+    --use-fulltextオプションを使用すると、各チャンクの処理時に全文をコンテキストとして含めることで、
+    より文脈を理解した高品質なQ&Aペアを生成できます。ただし、処理時間とAPIコストが増加します。
+    """
     try:
         console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
         text = file_path.read_text(encoding="utf-8")
@@ -167,16 +172,31 @@ def generate(
             dirs = create_output_directories(output_dir)
             console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
 
+        # 全文使用の場合は警告を表示
+        if use_fulltext:
+            console.print("[yellow]⚠ 全文コンテキストモードが有効です。処理時間とコストが増加する可能性があります。[/yellow]")
+            console.print(f"[dim]全文長: {len(text)} 文字[/dim]")
+
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
 
             for chunk in chunks:
                 for ga_pair in ga_pairs:
-                    qa_pairs = generate_qa_for_chunk_with_ga(
-                        chunk, model=model, ga_pair=ga_pair, 
-                        logs_dir=dirs["logs"] if dirs else None,
-                        num_qa_pairs=num_qa_pairs
-                    )
+                    if use_fulltext:
+                        qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
+                            chunk=chunk,
+                            full_text=text,
+                            model=model,
+                            ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
+                    else:
+                        qa_pairs = generate_qa_for_chunk_with_ga(
+                            chunk, model=model, ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
 
                     for pair in qa_pairs:
                         all_qa_pairs_with_ga.append({
