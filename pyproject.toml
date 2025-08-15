@@ -2,13 +2,16 @@
 name = "easy-dataset-cli"
 version = "1.0.0"
 description = "A simple CLI tool to generate QA pairs from a text file using LLMs and GA pairs, outputting genre-specific XML files."
+requires-python = ">=3.9"
 dependencies = [
-    "typer[all]",          # CLIフレームワーク
+    "typer",               # CLIフレームワーク
     "rich",                # リッチなコンソール出力
     "litellm",             # LLM連携ライブラリ
     "langchain-text-splitters", # テキスト分割用
     "mistune",             # マークダウン解析用ライブラリ
-    "python-dotenv"        # .env ファイル読み込み用
+    "python-dotenv",       # .env ファイル読み込み用
+    "huggingface-hub",     # Hugging Face Hub API
+    "datasets"             # Hugging Face Datasets
 ]
 
 [project.scripts]

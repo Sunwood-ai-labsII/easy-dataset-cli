@@ -12,11 +12,16 @@ from .core import (
     split_text,
     parse_ga_file,
     generate_qa_for_chunk_with_ga,
+    generate_qa_for_chunk_with_ga_and_fulltext,
     convert_to_xml_by_genre,
     generate_ga_definitions,
     parse_ga_definitions_from_xml,
     save_ga_definitions_by_genre,
-    create_output_directories
+    create_output_directories,
+    sanitize_filename,
+    convert_all_xml_to_alpaca,
+    upload_to_huggingface,
+    create_dataset_card
 )
 
 # .envファイルを読み込む
@@ -27,11 +32,6 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]}
 )
 console = Console()
-
-
-def sanitize_filename(name: str) -> str:
-    """ファイル名として安全な文字列に変換する"""
-    return "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).rstrip()
 
 
 @app.command()
@@ -47,11 +47,11 @@ def create_ga(
     model: Annotated[str, typer.Option(
         "--model", "-m",
         help="GAペア定義の生成に使用するLLMモデル名。"
-    )] = "openrouter/openai/gpt-4o",
+    )] = "openrouter/openai/gpt-oss-120b",
     num_ga_pairs: Annotated[int, typer.Option(
         "--num-ga-pairs", "-g",
         help="生成するGAペアの数。指定しない場合はLLMが適切な数を決定します。"
-    )] = None,
+    )] = 5,
 ):
     """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
     console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
@@ -138,9 +138,37 @@ def generate(
     num_qa_pairs: Annotated[int, typer.Option(
         "--num-qa-pairs", "-q",
         help="各チャンク・GAペアの組み合わせで生成するQ&Aペアの数。指定しない場合はLLMが適切な数を決定します。"
-    )] = None,
+    )] = 10,
+    use_fulltext: Annotated[bool, typer.Option(
+        "--use-fulltext", "-f",
+        help="全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。"
+    )] = False,
+    export_alpaca: Annotated[bool, typer.Option(
+        "--export-alpaca", "-a",
+        help="生成されたQ&AペアをAlpaca形式のJSONファイルとして出力します。"
+    )] = False,
+    upload_hf: Annotated[bool, typer.Option(
+        "--upload-hf", "-u",
+        help="生成されたデータセットをHugging Face Hubにアップロードします。"
+    )] = False,
+    hf_repo_name: Annotated[str, typer.Option(
+        "--hf-repo-name", "-r",
+        help="Hugging Face Hubのリポジトリ名（例: username/dataset-name）"
+    )] = "",
+    hf_token: Annotated[str, typer.Option(
+        "--hf-token", "-t",
+        help="Hugging Face APIトークン（環境変数HUGGINGFACE_TOKENからも取得可能）"
+    )] = "",
+    hf_private: Annotated[bool, typer.Option(
+        "--hf-private",
+        help="Hugging Faceリポジトリをプライベートにします。"
+    )] = False,
 ):
-    """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。"""
+    """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。
+    
+    --use-fulltextオプションを使用すると、各チャンクの処理時に全文をコンテキストとして含めることで、
+    より文脈を理解した高品質なQ&Aペアを生成できます。ただし、処理時間とAPIコストが増加します。
+    """
     try:
         console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
         text = file_path.read_text(encoding="utf-8")
@@ -167,16 +195,31 @@ def generate(
             dirs = create_output_directories(output_dir)
             console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
 
+        # 全文使用の場合は警告を表示
+        if use_fulltext:
+            console.print("[yellow]⚠ 全文コンテキストモードが有効です。処理時間とコストが増加する可能性があります。[/yellow]")
+            console.print(f"[dim]全文長: {len(text)} 文字[/dim]")
+
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
 
             for chunk in chunks:
                 for ga_pair in ga_pairs:
-                    qa_pairs = generate_qa_for_chunk_with_ga(
-                        chunk, model=model, ga_pair=ga_pair, 
-                        logs_dir=dirs["logs"] if dirs else None,
-                        num_qa_pairs=num_qa_pairs
-                    )
+                    if use_fulltext:
+                        qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
+                            chunk=chunk,
+                            full_text=text,
+                            model=model,
+                            ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
+                    else:
+                        qa_pairs = generate_qa_for_chunk_with_ga(
+                            chunk, model=model, ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
 
                     for pair in qa_pairs:
                         all_qa_pairs_with_ga.append({
@@ -208,6 +251,34 @@ def generate(
                 console.print(f"  - [green]✓[/green] {output_file_path.name}")
 
             console.print("\n[bold green]すべてのファイルの保存が完了しました。[/bold green]")
+            
+            # アルパカ形式でのエクスポート
+            if export_alpaca:
+                console.print("\n[bold blue]Alpaca形式のJSONファイルを生成中...[/bold blue]")
+                alpaca_file = dirs["base"] / "dataset_alpaca.json"
+                alpaca_data = convert_all_xml_to_alpaca(dirs["qa"], alpaca_file)
+                
+                # データセットカードを生成
+                readme_file = dirs["base"] / "README.md"
+                create_dataset_card(alpaca_data, readme_file, "Generated QA Dataset")
+                
+                # Hugging Face Hubにアップロード
+                if upload_hf:
+                    if not hf_repo_name:
+                        console.print("[bold red]--hf-repo-nameが指定されていません！[/bold red]")
+                        console.print("[yellow]例: --hf-repo-name username/my-qa-dataset[/yellow]")
+                    else:
+                        console.print(f"\n[bold blue]Hugging Face Hubにアップロード中...[/bold blue]")
+                        success = upload_to_huggingface(
+                            dataset_data=alpaca_data,
+                            repo_name=hf_repo_name,
+                            hf_token=hf_token if hf_token else None,
+                            private=hf_private,
+                            commit_message=f"Upload QA dataset with {len(alpaca_data)} entries",
+                            readme_file=readme_file
+                        )
+                        if not success:
+                            console.print("[bold red]Hugging Faceアップロードに失敗しました[/bold red]")
         else:
             console.print("\n--- 生成されたQ&Aペア (Genre別XML) ---")
             for genre, xml_content in xml_outputs_by_genre.items():
@@ -216,6 +287,81 @@ def generate(
     
     except Exception as e:
         console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def convert_to_alpaca(
+    qa_dir: Annotated[Path, typer.Argument(
+        exists=True, dir_okay=True, readable=True,
+        help="XMLファイルが保存されているqaディレクトリへのパス。"
+    )],
+    output_file: Annotated[Path, typer.Option(
+        "--output-file", "-o", file_okay=True, dir_okay=False,
+        help="出力するAlpaca形式JSONファイルのパス。"
+    )] = None,
+    upload_hf: Annotated[bool, typer.Option(
+        "--upload-hf", "-u",
+        help="生成されたデータセットをHugging Face Hubにアップロードします。"
+    )] = False,
+    hf_repo_name: Annotated[str, typer.Option(
+        "--hf-repo-name", "-r",
+        help="Hugging Face Hubのリポジトリ名（例: username/dataset-name）"
+    )] = "",
+    hf_token: Annotated[str, typer.Option(
+        "--hf-token", "-t",
+        help="Hugging Face APIトークン（環境変数HUGGINGFACE_TOKENからも取得可能）"
+    )] = "",
+    hf_private: Annotated[bool, typer.Option(
+        "--hf-private",
+        help="Hugging Faceリポジトリをプライベートにします。"
+    )] = False,
+):
+    """既存のXMLファイルをAlpaca形式のJSONに変換し、オプションでHugging Face Hubにアップロードします。"""
+    
+    try:
+        # デフォルトの出力ファイル名を設定
+        if output_file is None:
+            output_file = qa_dir.parent / "dataset_alpaca.json"
+        
+        console.print(f"XMLファイルを変換中: [cyan]{qa_dir}[/cyan]")
+        
+        # アルパカ形式に変換
+        alpaca_data = convert_all_xml_to_alpaca(qa_dir, output_file)
+        
+        if not alpaca_data:
+            console.print("[bold red]変換できるデータが見つかりませんでした。[/bold red]")
+            raise typer.Exit(code=1)
+        
+        # データセットカードを生成
+        readme_file = output_file.parent / "README.md"
+        create_dataset_card(alpaca_data, readme_file, "Converted QA Dataset")
+        
+        # Hugging Face Hubにアップロード
+        if upload_hf:
+            if not hf_repo_name:
+                console.print("[bold red]--hf-repo-nameが指定されていません！[/bold red]")
+                console.print("[yellow]例: --hf-repo-name username/my-qa-dataset[/yellow]")
+                raise typer.Exit(code=1)
+            
+            console.print(f"\n[bold blue]Hugging Face Hubにアップロード中...[/bold blue]")
+            success = upload_to_huggingface(
+                dataset_data=alpaca_data,
+                repo_name=hf_repo_name,
+                hf_token=hf_token if hf_token else None,
+                private=hf_private,
+                commit_message=f"Upload converted QA dataset with {len(alpaca_data)} entries",
+                readme_file=readme_file
+            )
+            
+            if not success:
+                console.print("[bold red]Hugging Faceアップロードに失敗しました[/bold red]")
+                raise typer.Exit(code=1)
+        
+        console.print(f"\n[bold green]✓[/bold green] 変換が完了しました！")
+        
+    except Exception as e:
+        console.print(f"[bold red]変換中にエラーが発生しました:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
