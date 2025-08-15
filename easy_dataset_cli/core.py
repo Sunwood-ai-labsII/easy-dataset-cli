@@ -9,6 +9,7 @@ from .ga_parser import (
 from .qa_generator import (
     generate_qa_for_chunk_with_ga,
     generate_qa_for_chunk_with_ga_and_fulltext,
+    generate_qa_for_chunk_with_ga_and_thinking,
     generate_ga_definitions
 )
 from .text_splitter import split_text
@@ -33,6 +34,7 @@ __all__ = [
     # Q&A生成関連
     'generate_qa_for_chunk_with_ga',
     'generate_qa_for_chunk_with_ga_and_fulltext',
+    'generate_qa_for_chunk_with_ga_and_thinking',
     'generate_ga_definitions',
     
     # テキスト分割

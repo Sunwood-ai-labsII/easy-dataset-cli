@@ -16,6 +16,7 @@ from datetime import datetime
 from .prompts import (
     get_qa_generation_prompt,
     get_qa_generation_with_fulltext_prompt,
+    get_qa_generation_with_thinking_prompt,
     get_ga_definition_generation_prompt
 )
 from .xml_utils import parse_qa_from_text_fallback
@@ -47,7 +48,7 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
     )
 
     messages = [
-        {"role": "system", "content": "あなたは、XML形式で厳密に出力する優秀なアシスタントです。XMLの特殊文字（&, <, >, \", '）は適切にエスケープし、改行は含めずに出力してください。"},
+        {"role": "system", "content": "あなたは、XML形式で厳密に出力する優秀なアシスタントです。通常のXMLの特殊文字（&, \", '）は適切にエスケープしてください。ただし、<Question>、<Answer>、<think>タグはそのまま使用してください。改行は含めずに出力してください。"},
         {"role": "user", "content": prompt}
     ]
 
@@ -108,21 +109,7 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
             qa_filename = f"qa_pairs_{genre_safe}_{audience_safe}_{timestamp}.xml"
             qa_file_path = logs_dir / qa_filename
             
-            # XML形式で保存
-            root = ET.Element("QAPairs")
-            for qa in qa_pairs:
-                pair_elem = ET.SubElement(root, "Pair")
-                question_elem = ET.SubElement(pair_elem, "Question")
-                question_elem.text = qa["question"]
-                answer_elem = ET.SubElement(pair_elem, "Answer")
-                answer_elem.text = qa["answer"]
-            
-            # 整形して保存
-            rough_string = ET.tostring(root, 'utf-8')
-            reparsed = minidom.parseString(rough_string)
-            pretty_xml = reparsed.toprettyxml(indent="  ")
-            qa_file_path.write_text(pretty_xml, encoding='utf-8')
-            console.print(f"[green]✓[/green] QAペアを保存: {qa_filename} ({len(qa_pairs)}件)")
+            _save_qa_pairs_to_xml(qa_pairs, logs_dir, qa_filename)
 
         return qa_pairs
 
@@ -174,7 +161,7 @@ def generate_qa_for_chunk_with_ga(
     )
 
     messages = [
-        {"role": "system", "content": "あなたは、XML形式で厳密に出力する優秀なアシスタントです。XMLの特殊文字（&, <, >, \", '）は適切にエスケープし、改行は含めずに出力してください。"},
+        {"role": "system", "content": "あなたは、XML形式で厳密に出力する優秀なアシスタントです。通常のXMLの特殊文字（&, \", '）は適切にエスケープしてください。ただし、<Question>、<Answer>、<think>タグはそのまま使用してください。改行は含めずに出力してください。"},
         {"role": "user", "content": prompt}
     ]
 
@@ -235,21 +222,7 @@ def generate_qa_for_chunk_with_ga(
             qa_filename = f"qa_pairs_{genre_safe}_{audience_safe}_{timestamp}.xml"
             qa_file_path = logs_dir / qa_filename
             
-            # XML形式で保存
-            root = ET.Element("QAPairs")
-            for qa in qa_pairs:
-                pair_elem = ET.SubElement(root, "Pair")
-                question_elem = ET.SubElement(pair_elem, "Question")
-                question_elem.text = qa["question"]
-                answer_elem = ET.SubElement(pair_elem, "Answer")
-                answer_elem.text = qa["answer"]
-            
-            # 整形して保存
-            rough_string = ET.tostring(root, 'utf-8')
-            reparsed = minidom.parseString(rough_string)
-            pretty_xml = reparsed.toprettyxml(indent="  ")
-            qa_file_path.write_text(pretty_xml, encoding='utf-8')
-            console.print(f"[green]✓[/green] QAペアを保存: {qa_filename} ({len(qa_pairs)}件)")
+            _save_qa_pairs_to_xml(qa_pairs, logs_dir, qa_filename)
 
         return qa_pairs
 
@@ -392,7 +365,31 @@ def _parse_qa_response(xml_content: str, logs_dir: Path = None, genre_safe: str 
 
                 if question_node is not None and answer_node is not None:
                     question_text = question_node.text or ""
-                    answer_text = answer_node.text or ""
+                    
+                    # <Answer>要素内の内容を適切に取得
+                    if len(answer_node) > 0:
+                        # サブエレメントがある場合（<think>タグなど）
+                        answer_parts = []
+                        
+                        # Answer要素の直接のテキスト（<think>より前）
+                        if answer_node.text:
+                            answer_parts.append(answer_node.text.strip())
+                        
+                        # 各サブエレメントのtail（サブエレメントの後のテキスト）
+                        for child in answer_node:
+                            if child.tag == 'think':
+                                # <think>タグの内容を取得
+                                think_content = child.text or ""
+                                answer_parts.append(f"<think>{think_content}</think>")
+                            
+                            # サブエレメントの後のテキスト
+                            if child.tail:
+                                answer_parts.append(child.tail.strip())
+                        
+                        answer_text = "".join(answer_parts)
+                    else:
+                        # サブエレメントがない場合は通常のテキスト
+                        answer_text = answer_node.text or ""
                     
                     # XMLエンティティデコード
                     question_text = _decode_xml_entities(question_text)
@@ -501,8 +498,184 @@ def _extract_qa_from_fallback_text(text: str) -> List[Dict[str, str]]:
 
 
 def _decode_xml_entities(text: str) -> str:
-    """XMLエンティティをデコードする"""
+    """XMLエンティティをデコードする（シンプル版）"""
     import html
     if text:
         return html.unescape(text)
     return text
+
+
+def _parse_answer_with_think(answer_text: str) -> Dict[str, str]:
+    """<think>タグを含む回答をパースして分離"""
+    import re
+    
+    # <think>...</think>タグを検索
+    think_match = re.search(r'<think>(.*?)</think>', answer_text, re.DOTALL)
+    
+    if think_match:
+        think_content = think_match.group(1).strip()
+        # <think>タグ以降の回答テキストを取得
+        answer_content = answer_text[think_match.end():].strip()
+        return {
+            "has_think": True,
+            "think_content": think_content,
+            "answer_content": answer_content
+        }
+    else:
+        return {
+            "has_think": False,
+            "think_content": "",
+            "answer_content": answer_text
+        }
+
+
+def _save_qa_pairs_to_xml(qa_pairs: List[Dict[str, str]], logs_dir: Path, qa_filename: str) -> None:
+    """Q&Aペアをきれいに整形されたXMLファイルとして保存（サブエレメント方式）"""
+    if not qa_pairs or not logs_dir:
+        return
+        
+    qa_file_path = logs_dir / qa_filename
+    
+    # ElementTreeで構造化生成
+    root = ET.Element("QAPairs")
+    for qa in qa_pairs:
+        pair_elem = ET.SubElement(root, "Pair")
+        question_elem = ET.SubElement(pair_elem, "Question")
+        question_elem.text = qa["question"]
+        
+        answer_elem = ET.SubElement(pair_elem, "Answer")
+        
+        # 回答内容を解析
+        parsed_answer = _parse_answer_with_think(qa["answer"])
+        
+        if parsed_answer["has_think"]:
+            # <think>をサブエレメントとして追加
+            think_elem = ET.SubElement(answer_elem, "think")
+            think_elem.text = parsed_answer["think_content"]
+            think_elem.tail = parsed_answer["answer_content"]
+        else:
+            # 通常の回答
+            answer_elem.text = parsed_answer["answer_content"]
+    
+    # 整形して保存
+    rough_string = ET.tostring(root, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    pretty_xml = reparsed.toprettyxml(indent="  ")
+    
+    qa_file_path.write_text(pretty_xml, encoding='utf-8')
+    console.print(f"[green]✓[/green] QAペアを保存: {qa_filename} ({len(qa_pairs)}件)")
+
+
+def generate_qa_for_chunk_with_ga_and_thinking(
+    chunk: str,
+    full_text: str,
+    model: str,
+    ga_pair: Dict[str, Dict[str, str]],
+    logs_dir: Path = None,
+    num_qa_pairs: int = None
+) -> List[Dict[str, str]]:
+    """litellmを使い、1つのチャンクと全文、1つのGAペアから思考フロー付きQ&Aペアのリストを生成する"""
+    prompt_template = get_qa_generation_with_thinking_prompt()
+    prompt = prompt_template.format(
+        chunk=chunk,
+        full_text=full_text,
+        genre_title=ga_pair['genre']['title'],
+        genre_description=ga_pair['genre']['description'],
+        audience_title=ga_pair['audience']['title'],
+        audience_description=ga_pair['audience']['description'],
+        num_qa_pairs=num_qa_pairs if num_qa_pairs is not None else "複数の"
+    )
+
+    messages = [
+        {"role": "system", "content": "あなたは、XML形式で厳密に出力する優秀なアシスタントです。通常のXMLの特殊文字（&, \", '）は適切にエスケープしてください。ただし、<Question>、<Answer>、<think>タグはそのまま使用してください。改行は含めずに出力してください。"},
+        {"role": "user", "content": prompt}
+    ]
+
+    # OpenRouter用の環境変数設定
+    os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
+
+    # タイムスタンプ付きログファイル名を生成
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    genre_safe = "".join(c for c in ga_pair['genre']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
+    audience_safe = "".join(c for c in ga_pair['audience']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
+    
+    try:
+        # リクエストログを保存
+        if logs_dir:
+            request_log = {
+                "timestamp": timestamp,
+                "model": model,
+                "genre": ga_pair['genre']['title'],
+                "audience": ga_pair['audience']['title'],
+                "prompt_length": len(prompt),
+                "messages": messages
+            }
+            request_filename = f"request_thinking_{genre_safe}_{audience_safe}_{timestamp}.json"
+            request_file_path = logs_dir / request_filename
+            with open(request_file_path, 'w', encoding='utf-8') as f:
+                json.dump(request_log, f, ensure_ascii=False, indent=2)
+            console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
+
+        response = completion(model=model, messages=messages)
+        xml_content = response.choices[0].message.content
+
+        # レスポンスログを保存
+        if logs_dir:
+            response_log = {
+                "timestamp": timestamp,
+                "model": model,
+                "genre": ga_pair['genre']['title'],
+                "audience": ga_pair['audience']['title'],
+                "response_length": len(xml_content),
+                "response_content": xml_content
+            }
+            response_filename = f"response_thinking_{genre_safe}_{audience_safe}_{timestamp}.json"
+            response_file_path = logs_dir / response_filename
+            with open(response_file_path, 'w', encoding='utf-8') as f:
+                json.dump(response_log, f, ensure_ascii=False, indent=2)
+            console.print(f"[dim]レスポンスログを保存: {response_filename}[/dim]")
+
+        # rawレスポンスを保存（オプション）
+        if logs_dir:
+            raw_filename = f"qa_thinking_raw_{genre_safe}_{audience_safe}_{timestamp}.md"
+            raw_file_path = logs_dir / raw_filename
+            raw_file_path.write_text(xml_content, encoding="utf-8")
+
+        qa_pairs = _parse_qa_response(xml_content, logs_dir, genre_safe, audience_safe, timestamp)
+
+        # 生成したQAを保存
+        if qa_pairs and logs_dir:
+            qa_filename = f"qa_pairs_thinking_{genre_safe}_{audience_safe}_{timestamp}.xml"
+            _save_qa_pairs_to_xml(qa_pairs, logs_dir, qa_filename)
+
+        return qa_pairs
+
+    except Exception as general_error:
+        # 詳細なエラー情報を表示
+        console.print(f"[bold red]チャンクとGAペアからの思考フロー付きQ&A生成中にエラーが発生しました:[/bold red]")
+        console.print(f"[bold red]エラータイプ:[/bold red] {type(general_error).__name__}")
+        console.print(f"[bold red]エラーメッセージ:[/bold red] {str(general_error)}")
+        console.print(f"[bold red]トレースバック:[/bold red]")
+        console.print(traceback.format_exc())
+        console.print(f"[dim]Genre: {ga_pair['genre']['title']}, Audience: {ga_pair['audience']['title']}[/dim]")
+        
+        # エラーログを保存
+        if logs_dir:
+            error_log = {
+                "timestamp": timestamp,
+                "model": model,
+                "genre": ga_pair['genre']['title'],
+                "audience": ga_pair['audience']['title'],
+                "error_type": type(general_error).__name__,
+                "error_message": str(general_error),
+                "traceback": traceback.format_exc()
+            }
+            error_filename = f"error_thinking_{genre_safe}_{audience_safe}_{timestamp}.json"
+            error_file_path = logs_dir / error_filename
+            with open(error_file_path, 'w', encoding='utf-8') as f:
+                json.dump(error_log, f, ensure_ascii=False, indent=2)
+            console.print(f"[dim]エラーログを保存: {error_filename}[/dim]")
+        
+        return []
+
+

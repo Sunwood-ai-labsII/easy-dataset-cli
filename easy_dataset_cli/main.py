@@ -13,6 +13,7 @@ from .core import (
     parse_ga_file,
     generate_qa_for_chunk_with_ga,
     generate_qa_for_chunk_with_ga_and_fulltext,
+    generate_qa_for_chunk_with_ga_and_thinking,
     convert_to_xml_by_genre,
     generate_ga_definitions,
     parse_ga_definitions_from_xml,
@@ -143,6 +144,10 @@ def generate(
         "--use-fulltext", "-f",
         help="全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。"
     )] = False,
+    use_thinking: Annotated[bool, typer.Option(
+        "--use-thinking", "-T",
+        help="各Q&Aペアに思考プロセスを追加して生成します。より深い理解と説明が可能になりますが、処理時間とコストが増加します。"
+    )] = False,
     append_mode: Annotated[bool, typer.Option(
         "--append", "-A",
         help="既存のXMLファイルに新しいQ&Aを追加します。指定しない場合は上書きします。"
@@ -204,12 +209,25 @@ def generate(
             console.print("[yellow]⚠ 全文コンテキストモードが有効です。処理時間とコストが増加する可能性があります。[/yellow]")
             console.print(f"[dim]全文長: {len(text)} 文字[/dim]")
 
+        # 思考フロー使用の場合は警告を表示
+        if use_thinking:
+            console.print("[yellow]⚠ 思考フローモードが有効です。各Q&Aに思考プロセスが追加されます。[/yellow]")
+
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
 
             for chunk in chunks:
                 for ga_pair in ga_pairs:
-                    if use_fulltext:
+                    if use_thinking:
+                        qa_pairs = generate_qa_for_chunk_with_ga_and_thinking(
+                            chunk=chunk,
+                            full_text=text if use_fulltext else "",
+                            model=model,
+                            ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
+                    elif use_fulltext:
                         qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
                             chunk=chunk,
                             full_text=text,
@@ -226,12 +244,13 @@ def generate(
                         )
 
                     for pair in qa_pairs:
-                        all_qa_pairs_with_ga.append({
+                        qa_entry = {
                             "genre": ga_pair['genre']['title'],
                             "audience": ga_pair['audience']['title'],
                             "question": pair['question'],
-                            "answer": pair['answer'],
-                        })
+                            "answer": pair['answer'],  # <think>...</think>回答...形式がそのまま入る
+                        }
+                        all_qa_pairs_with_ga.append(qa_entry)
 
                     progress.update(
                         task, advance=1,
