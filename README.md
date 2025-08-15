@@ -3,15 +3,18 @@
 # 🚀 Easy Dataset CLI
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue.svg" alt="Python Version">
   <img src="https://img.shields.io/badge/CLI-Typer-green.svg" alt="CLI Framework">
   <img src="https://img.shields.io/badge/LLM-OpenAI%20%7C%20OpenRouter-orange.svg" alt="LLM Support">
-  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
+  <img src="https://img.shields.io/badge/Format-Alpaca%20%7C%20XML-purple.svg" alt="Output Format">
+  <img src="https://img.shields.io/badge/🤗-Hugging%20Face-yellow.svg" alt="Hugging Face">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </p>
 
 <p align="center">
   テキストファイルからQ&Aペアを生成するシンプルなCLIツール<br>
-  LLMを使用してGenre-Audienceペアに基づいた多様なQ&Aデータセットを作成し、Genre別のXMLファイルとして出力します
+  LLMを使用してGenre-Audienceペアに基づいた多様なQ&Aデータセットを作成し、<br>
+  <strong>Alpaca形式JSON</strong>やGenre別XMLファイルとして出力、<strong>Hugging Face Hub</strong>への直接アップロードも対応
 </p>
 
 </div>
@@ -22,6 +25,10 @@
 - **🔄 柔軟**: 複数のGenre-Audienceペアに対応
 - **🛡️ 安定**: LLMからの直接XML出力で信頼性向上
 - **⚡ 効率的**: テキスト分割とバッチ処理で大きなファイルにも対応
+- **🦙 Alpaca対応**: 生成されたQ&AペアをAlpaca形式のJSONで出力
+- **🤗 HF統合**: Hugging Face Hubへの直接アップロード機能
+- **📊 データセットカード**: 自動的なREADME.md生成でデータセット情報を整理
+- **🔄 変換機能**: 既存XMLファイルからAlpaca形式への変換コマンド
 
 ## 📦 インストール
 
@@ -55,82 +62,39 @@ uv run easy-dataset create-ga .\example\input\documents\sample_document.txt --ou
 uv run easy-dataset generate .\example\input\documents\sample_document.txt --ga-file .\example\output\sample_document\ga\ga_definitions.xml --output-dir .\example\output\sample_document\ --chunk-size 500
 ```
 
-### 💻 実行例
+### 🦙 Alpaca形式とHugging Face連携の使用例
 
-```powershell
-PS C:\Prj\easy-dataset-cli> uv run easy-dataset --help
-Usage: easy-dataset [OPTIONS] COMMAND [ARGS]...
+#### Alpaca形式での出力
+```bash
+# Q&A生成と同時にAlpaca形式のJSONファイルを出力
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --export-alpaca
+```
 
-テキストファイルからQ&Aペアを生成するシンプルなCLIツール。
+#### Hugging Face Hubへの直接アップロード
+```bash
+# 環境変数でトークンを設定
+set HUGGINGFACE_TOKEN=hf_your_token_here
 
-╭─ Options ──────────────────────────────────────────────────────────────────╮
-│ --install-completion            Install completion for the current shell.  │
-│ --show-completion               Show completion for the current shell.      │
-│ --help                -h        Show this message and exit.                │
-╰────────────────────────────────────────────────────────────────────────────╯
+# データセット生成とHugging Face Hubアップロードを一度に実行
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --export-alpaca \
+  --upload-hf \
+  --hf-repo-name username/my-qa-dataset
+```
 
-╭─ Commands ─────────────────────────────────────────────────────────────────╮
-│ create-ga   元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとに     │
-│             マークダウンファイルに保存します。                             │
-│ generate    テキストファイルとGA定義からQ&Aペアを生成し、Genre別の        │
-│             XMLファイルとして出力します。                                  │
-╰────────────────────────────────────────────────────────────────────────────╯
-
-PS C:\Prj\easy-dataset-cli> uv run easy-dataset create-ga .\example\input\documents\sample_document.txt --output-dir .\example\output\sample_document --num-ga-pairs 10
-ファイルを読み込んでいます: example\input\documents\sample_document.txt
-読み込んだテキスト長: 545 文字
-LLMに最適なGAペアを提案させています...
-コンテキスト長: 545 文字
-LLMレスポンス長: 2534 文字
-出力ディレクトリを作成しました: ga/, logs/, qa/
-✓ LLMのrawレスポンスを保存しました: example\output\sample_document\logs\raw.md
-XMLからGAペアを解析しています...
-見つかったPairノード数: 10
-✓ 学術論文 x コンピュータサイエンス研究者
-✓ 技術ブログ x プログラミング初心者
-✓ 教科書 x 大学生
-✓ FAQ x 実務開発者
-✓ 対話形式の記事 x 中高生
-✓ 専門技術書 x データサイエンティスト
-✓ ケーススタディ x ITプロジェクトマネージャー
-✓ オンラインコース教材 x 社会人学習者
-✓ 雑誌記事 x テック愛好者
-✓ ワークショップ資料 x 教育者
-✓ GA定義XMLファイルを保存しました: example\output\sample_document\ga\ga_definitions.xml
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_学術論文.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_技術ブログ.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_教科書.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_faq.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_対話形式の記事.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_専門技術書.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_ケーススタディ.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_オンラインコース教材.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_雑誌記事.md
-GA定義を保存しました: example\output\sample_document\ga\ga_definitions_ワークショップ資料.md
-✓ 10個のGAペアを example\output\sample_document\ga に保存しました。
-ヒント: 生成されたファイルをレビューし、必要に応じて編集してから `generate` コマンドで使用してください。
-
-PS C:\Prj\easy-dataset-cli> uv run easy-dataset generate .\example\input\documents\sample_document.txt --ga-file .\example\output\sample_document\ga\ga_definitions.xml --output-dir .\example\output\sample_document\ --chunk-size 500
-ファイルを読み込んでいます: example\input\documents\sample_document.txt
-GAペアを解析しています: example\output\sample_document\ga\ga_definitions.xml
-10 個のGAペアを見つけました。
-テキストをチャンクに分割しています...
-2 個のチャンクを作成しました。
-出力ディレクトリを作成しました: ga/, logs/, qa/
-Genre: ワークショップ資料 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:00
-合計 120 個のQ&Aペアを生成しました。
-XMLファイルを example\output\sample_document\qa に保存しています...
-- ✓ 学術論文.xml
-- ✓ 技術ブログ.xml
-- ✓ 教科書.xml
-- ✓ FAQ.xml
-- ✓ 対話形式の記事.xml
-- ✓ 専門技術書.xml
-- ✓ ケーススタディ.xml
-- ✓ オンラインコース教材.xml
-- ✓ 雑誌記事.xml
-- ✓ ワークショップ資料.xml
-すべてのファイルの保存が完了しました。
+#### 既存XMLファイルの変換とアップロード
+```bash
+# 既存のXMLファイルをAlpaca形式に変換してHugging Face Hubにアップロード
+uv run easy-dataset convert-to-alpaca .\example\output\sample_document\qa \
+  --output-file dataset.json \
+  --upload-hf \
+  --hf-repo-name username/my-qa-dataset \
+  --hf-private
 ```
 
 ### ⚙️ コマンドオプション
@@ -191,6 +155,8 @@ Options:
 
 ## 📁 出力形式
 
+### 📄 XML形式（デフォルト）
+
 `generate`コマンドの実行により、各GenreごとにXMLファイルが生成されます：
 
 ```xml
@@ -204,7 +170,41 @@ Options:
 </QAPairs>
 ```
 
-生成されるファイル構造：
+### 🦙 Alpaca形式（`--export-alpaca`オプション）
+
+`--export-alpaca`オプションを使用すると、機械学習で広く使用されるAlpaca形式のJSONファイルが生成されます：
+
+```json
+[
+  {
+    "instruction": "Pythonの設計哲学における主要な特徴は何ですか？",
+    "input": "",
+    "output": "Pythonの設計哲学は「読みやすさ」を重視しており、シンプルで理解しやすい構文が特徴です。",
+    "genre": "学術論文",
+    "audience": "コンピュータサイエンス研究者"
+  },
+  {
+    "instruction": "Pythonのインタープリター型言語としての利点は何ですか？",
+    "input": "",
+    "output": "インタープリター型のため、コンパイル不要で即座にコードを実行でき、開発サイクルが高速化されます。",
+    "genre": "技術ブログ",
+    "audience": "プログラミング初心者"
+  }
+]
+```
+
+### 📊 自動生成されるデータセットカード
+
+Alpaca形式で出力する際、以下の情報を含むREADME.mdが自動生成されます：
+
+- **データセット概要**: エントリ数、形式、言語、ライセンス
+- **ジャンル分布**: 含まれるすべてのジャンルのリスト
+- **対象読者分布**: 含まれるすべての対象読者のリスト
+- **使用方法**: Hugging Face Datasetsでの読み込み例
+- **メタデータ**: Hugging Face Hub用のYAMLフロントマター
+
+### 📁 生成されるファイル構造
+
 ```
 output_directory/
 ├── ga/
@@ -213,11 +213,13 @@ output_directory/
 │   ├── ga_definitions_技術ブログ.md
 │   └── ...
 ├── qa/
-│   ├── 学術論文.xml                # Genre別Q&Aファイル
+│   ├── 学術論文.xml                # Genre別Q&AファイルXML形式）
 │   ├── 技術ブログ.xml
 │   └── ...
-└── logs/
-    └── raw.md                      # LLMの生レスポンス
+├── logs/
+│   └── raw.md                      # LLMの生レスポンス
+├── dataset_alpaca.json             # 🦙 Alpaca形式のデータセット（--export-alpacaオプション使用時）
+└── README.md                       # 📊 データセットカード（--export-alpacaオプション使用時）
 ```
 
 ## 🤖 サポートするLLMモデル
@@ -234,6 +236,89 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 easy-dataset generate document.txt -g ga.md -m gpt-4o  # 自動でopenai/gpt-4oに変換
 easy-dataset generate document.txt -g ga.md -m claude-3-sonnet  # 自動でanthropic/claude-3-sonnetに変換
 ```
+
+## 🤗 Hugging Face Hub統合
+
+### 🔑 環境変数の設定
+
+```bash
+# Windows (cmd)
+set HUGGINGFACE_TOKEN=hf_your_token_here
+
+# Windows (PowerShell)
+$env:HUGGINGFACE_TOKEN="hf_your_token_here"
+
+# Linux/macOS
+export HUGGINGFACE_TOKEN="hf_your_token_here"
+```
+
+### 📤 データセットのアップロード
+
+```bash
+# 生成と同時にHugging Face Hubにアップロード
+uv run easy-dataset generate document.txt \
+  --ga-file ga.xml \
+  --export-alpaca \
+  --upload-hf \
+  --hf-repo-name username/my-dataset
+
+# 既存XMLファイルを変換してアップロード
+uv run easy-dataset convert-to-alpaca ./qa_directory \
+  --upload-hf \
+  --hf-repo-name username/my-dataset \
+  --hf-private  # プライベートリポジトリとして作成
+```
+
+### 📥 アップロード後の使用方法
+
+```python
+from datasets import load_dataset
+
+# Hugging Face Hubからデータセットを読み込み
+dataset = load_dataset("username/my-dataset")
+
+# データセットの内容を確認
+print(dataset['train'][0])
+# {
+#   'instruction': 'Pythonの設計哲学における主要な特徴は何ですか？',
+#   'input': '',
+#   'output': 'Pythonの設計哲学は「読みやすさ」を重視しており...',
+#   'genre': '学術論文',
+#   'audience': 'コンピュータサイエンス研究者'
+# }
+
+# ファインチューニング用のデータ準備
+def format_instruction(example):
+    return f"### 指示:\n{example['instruction']}\n\n### 回答:\n{example['output']}"
+
+formatted_dataset = dataset.map(lambda x: {"text": format_instruction(x)})
+```
+
+### 📊 自動生成されるデータセットカードの例
+
+アップロード時に自動生成されるREADME.mdには以下の情報が含まれます：
+
+```yaml
+---
+license: mit
+task_categories:
+- question-answering
+- text-generation
+language:
+- ja
+tags:
+- alpaca
+- qa
+- japanese
+size_categories:
+- n<1K  # データ量に応じて自動設定
+---
+```
+
+- **データセット概要**: エントリ数、形式、言語、ライセンス
+- **ジャンル・対象読者分布**: 含まれるすべてのカテゴリ
+- **使用方法**: Hugging Face Datasetsでの読み込み例
+- **生成ツール情報**: easy-dataset-cliへのリンク
 
 ## 📜 ライセンス
 
