@@ -124,6 +124,30 @@ def extract_simple_tag_content(content: str, tag: str) -> str:
         return ""
 
 
+def _parse_answer_with_think(answer_text: str) -> Dict[str, str]:
+    """<think>タグを含む回答をパースして分離"""
+    import re
+    
+    # <think>...</think>タグを検索
+    think_match = re.search(r'<think>(.*?)</think>', answer_text, re.DOTALL)
+    
+    if think_match:
+        think_content = think_match.group(1).strip()
+        # <think>タグ以降の回答テキストを取得
+        answer_content = answer_text[think_match.end():].strip()
+        return {
+            "has_think": True,
+            "think_content": think_content,
+            "answer_content": answer_content
+        }
+    else:
+        return {
+            "has_think": False,
+            "think_content": "",
+            "answer_content": answer_text
+        }
+
+
 def load_existing_xml_file(xml_file_path: Path) -> List[Dict[str, str]]:
     """既存のXMLファイルからQ&Aペアを読み込む"""
     qa_pairs = []
@@ -355,10 +379,23 @@ def convert_to_xml_by_genre(all_qa_pairs: List[Dict[str, str]], qa_dir: Path = N
             question_elem.text = item["question"]
 
             answer_elem = ET.SubElement(pair_elem, "Answer")
-            answer_elem.text = item["answer"]
+            
+            # 回答内容を解析
+            parsed_answer = _parse_answer_with_think(item["answer"])
+            
+            if parsed_answer["has_think"]:
+                # <think>をサブエレメントとして追加
+                think_elem = ET.SubElement(answer_elem, "think")
+                think_elem.text = parsed_answer["think_content"]
+                think_elem.tail = parsed_answer["answer_content"]
+            else:
+                # 通常の回答
+                answer_elem.text = parsed_answer["answer_content"]
 
         rough_string = ET.tostring(root, 'utf-8')
         reparsed = minidom.parseString(rough_string)
-        xml_outputs[genre] = reparsed.toprettyxml(indent="  ")
+        xml_output = reparsed.toprettyxml(indent="  ")
+        
+        xml_outputs[genre] = xml_output
 
     return xml_outputs

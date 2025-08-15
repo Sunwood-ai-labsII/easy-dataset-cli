@@ -31,8 +31,7 @@ def xml_to_alpaca_format(xml_file_path: Path) -> List[Dict[str, str]]:
                 audience = audience_elem.text or ""
                 question = question_elem.text or ""
                 answer = answer_elem.text or ""
-                
-                # アルパカ形式に変換
+                # Answerタグの内容をそのままoutputに入れる（<think>...</think>含む）
                 alpaca_entry = {
                     "instruction": question,
                     "input": "",  # アルパカ形式では通常空文字
