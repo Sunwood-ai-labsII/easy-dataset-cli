@@ -207,3 +207,4 @@ marimo/_lsp/
 __marimo__/
 .SourceSageAssets/
 uv.lock
+example/output/structured/logs/

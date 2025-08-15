@@ -1,80 +1,25 @@
 # easy_dataset_cli/prompts.py
-"""LLMプロンプト定義"""
+"""LLMプロンプト定義とマークダウンファイル読み込み"""
 
-QA_GENERATION_PROMPT_WITH_GA_JA = """# 役割: Q&Aペア生成の専門家（体裁・読者対応版）
-
-あなたは、与えられた文章から高品質な質問と回答のペアを作成する専門家です。特に、指定された「体裁」と「読者」に合わせてスタイルを調整する能力に長けています。
-
-# 指示:
-1.  与えられた「文章」を注意深く読んでください。
-2.  指定された「目標とする体裁」と「目標とする読者」の役割になりきってください。
-3.  文章に書かれている情報**のみ**に基づいて、複数のユニークで洞察に富んだQ&Aペアを生成してください。
-4.  質問のスタイルと複雑さは、「目標とする読者」の視点に合わせてください。
-5.  回答のスタイル、トーン、詳細さは、「目標とする体裁」に合わせてください。
-
-# 目標とする体裁:
-{genre_title}
-{genre_description}
-
-# 目標とする読者:
-{audience_title}
-{audience_description}
-
-# 文章:
----
-{context}
----
-
-# 出力形式:
-**必ず**、ルート要素が `<QAPairs>` である単一の有効なXMLとして応答してください。XML以外の説明文は一切含めないでください。
-各Q&Aペアは `<Pair>` タグで囲み、その中に `<Question>` と `<Answer>` タグを含めてください。
-
-# 出力例:
-<QAPairs>
-<Pair>
-<Question>ミトコンドリアの主な機能は何ですか？</Question>
-<Answer>ミトコンドリアの主な機能は、細胞のエネルギー通貨であるアデノシン三リン酸（ATP）の大部分を生成することです。</Answer>
-</Pair>
-<Pair>
-<Question>ATPは細胞内でどのように利用されますか？</Question>
-<Answer>ATPは細胞内の様々な化学反応のエネルギー源として利用されます。</Answer>
-</Pair>
-</QAPairs>
-
-それでは、Q&Aペアの生成を開始してください。"""
+from pathlib import Path
 
 
-GA_DEFINITION_GENERATION_PROMPT_JA = """# 役割: GA（Genre-Audience）ペア定義の専門家
+def load_prompt_template(template_name: str) -> str:
+    """プロンプトテンプレートをマークダウンファイルから読み込む"""
+    prompt_dir = Path(__file__).parent / "prompts"
+    template_path = prompt_dir / f"{template_name}.md"
+    
+    if not template_path.exists():
+        raise FileNotFoundError(f"プロンプトテンプレートが見つかりません: {template_path}")
+    
+    return template_path.read_text(encoding="utf-8")
 
-あなたは、与えられた文章の内容を分析し、最適なGenre（体裁）とAudience（読者）のペアを提案する専門家です。
 
-# 指示:
-1. 与えられた文章の内容、トピック、専門性レベルを分析してください。
-2. この文章から質問と回答のペアを生成する際に最適となる3-5個のGenre-Audienceペアを提案してください。
-3. 各Genreは異なる文体・形式（学術論文、技術ブログ、教科書、FAQ、対話形式など）を表現してください。
-4. 各Audienceは異なる知識レベル・立場（初心者、学生、専門家、実務者など）を表現してください。
-5. 文章の内容に適したペアを選択し、多様性を確保してください。
+def get_qa_generation_prompt() -> str:
+    """Q&A生成プロンプトを取得"""
+    return load_prompt_template("qa_generation")
 
-# 文章:
----
-{context}
----
 
-# 出力形式:
-**必ず**、以下の形式のMarkdownとして出力してください。各ペアは `---` で区切ってください。
-
-# Genre: [体裁名]
-[体裁の詳細説明]
-
-# Audience: [読者名]
-[読者の詳細説明]
-
----
-
-# Genre: [体裁名2]
-[体裁の詳細説明2]
-
-# Audience: [読者名2]
-[読者の詳細説明2]
-
-それでは、最適なGA定義の生成を開始してください。"""
+def get_ga_definition_generation_prompt() -> str:
+    """GA定義生成プロンプトを取得"""
+    return load_prompt_template("ga_definition_generation")
