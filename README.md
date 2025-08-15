@@ -77,6 +77,22 @@ uv run easy-dataset generate .\example\input\documents\sample_document.txt \
   --export-alpaca
 ```
 
+#### 思考フロー付きQ&Aの生成
+```bash
+# 思考フローを含むQ&Aペアを生成
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --use-thinking
+
+# 思考フローと全文コンテキストを併用して生成
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --use-thinking \
+  --use-fulltext
+```
+
 #### Hugging Face Hubへの直接アップロード
 ```bash
 # 環境変数でトークンを設定
@@ -130,6 +146,8 @@ Options:
   -m, --model TEXT         Q&Aペアの生成に使用するLLMモデル [default: openrouter/openai/gpt-4o]
   --chunk-size INTEGER     テキストチャンクの最大サイズ [default: 2000]
   --chunk-overlap INTEGER  チャンク間のオーバーラップサイズ [default: 200]
+  -f, --use-fulltext       全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。
+  -T, --use-thinking       各Q&Aペアに思考プロセスを追加して生成します。より深い理解と説明が可能になりますが、処理時間とコストが増加します。
   -h, --help               Show this message and exit
 ```
 

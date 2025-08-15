@@ -13,6 +13,7 @@ from .core import (
     parse_ga_file,
     generate_qa_for_chunk_with_ga,
     generate_qa_for_chunk_with_ga_and_fulltext,
+    generate_qa_for_chunk_with_ga_and_thinking,
     convert_to_xml_by_genre,
     generate_ga_definitions,
     parse_ga_definitions_from_xml,
@@ -143,6 +144,14 @@ def generate(
         "--use-fulltext", "-f",
         help="全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。"
     )] = False,
+    use_thinking: Annotated[bool, typer.Option(
+        "--use-thinking", "-T",
+        help="各Q&Aペアに思考プロセスを追加して生成します。より深い理解と説明が可能になりますが、処理時間とコストが増加します。"
+    )] = False,
+    append_mode: Annotated[bool, typer.Option(
+        "--append", "-A",
+        help="既存のXMLファイルに新しいQ&Aを追加します。指定しない場合は上書きします。"
+    )] = False,
     export_alpaca: Annotated[bool, typer.Option(
         "--export-alpaca", "-a",
         help="生成されたQ&AペアをAlpaca形式のJSONファイルとして出力します。"
@@ -200,12 +209,25 @@ def generate(
             console.print("[yellow]⚠ 全文コンテキストモードが有効です。処理時間とコストが増加する可能性があります。[/yellow]")
             console.print(f"[dim]全文長: {len(text)} 文字[/dim]")
 
+        # 思考フロー使用の場合は警告を表示
+        if use_thinking:
+            console.print("[yellow]⚠ 思考フローモードが有効です。各Q&Aに思考プロセスが追加されます。[/yellow]")
+
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
 
             for chunk in chunks:
                 for ga_pair in ga_pairs:
-                    if use_fulltext:
+                    if use_thinking:
+                        qa_pairs = generate_qa_for_chunk_with_ga_and_thinking(
+                            chunk=chunk,
+                            full_text=text if use_fulltext else "",
+                            model=model,
+                            ga_pair=ga_pair,
+                            logs_dir=dirs["logs"] if dirs else None,
+                            num_qa_pairs=num_qa_pairs
+                        )
+                    elif use_fulltext:
                         qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
                             chunk=chunk,
                             full_text=text,
@@ -222,12 +244,13 @@ def generate(
                         )
 
                     for pair in qa_pairs:
-                        all_qa_pairs_with_ga.append({
+                        qa_entry = {
                             "genre": ga_pair['genre']['title'],
                             "audience": ga_pair['audience']['title'],
                             "question": pair['question'],
-                            "answer": pair['answer'],
-                        })
+                            "answer": pair['answer'],  # <think>...</think>回答...形式がそのまま入る
+                        }
+                        all_qa_pairs_with_ga.append(qa_entry)
 
                     progress.update(
                         task, advance=1,
@@ -239,7 +262,7 @@ def generate(
             "個のQ&Aペアを生成しました。"
         )
 
-        xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga)
+        xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga, dirs["qa"] if dirs else None, append_mode)
 
         if dirs:
             console.print(f"XMLファイルを [cyan]{dirs['qa']}[/cyan] に保存しています...")
@@ -286,7 +309,12 @@ def generate(
                 console.print(xml_content, overflow="fold")
     
     except Exception as e:
-        console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
+        console.print(f"[bold red]エラーが発生しました:[/bold red]")
+        console.print(f"[bold red]エラータイプ:[/bold red] {type(e).__name__}")
+        console.print(f"[bold red]エラーメッセージ:[/bold red] {str(e)}")
+        console.print(f"[bold red]トレースバック:[/bold red]")
+        import traceback
+        console.print(traceback.format_exc())
         raise typer.Exit(code=1)
 
 
@@ -362,6 +390,37 @@ def convert_to_alpaca(
         
     except Exception as e:
         console.print(f"[bold red]変換中にエラーが発生しました:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def aggregate_logs(
+    output_dir: Annotated[Path, typer.Argument(
+        exists=True, dir_okay=True, readable=True,
+        help="logsフォルダが含まれる出力ディレクトリへのパス。"
+    )]
+):
+    """logsフォルダ内のタイムスタンプ付きXMLファイルを集約してqaフォルダのXMLを生成します。"""
+    
+    try:
+        logs_dir = output_dir / "logs"
+        qa_dir = output_dir / "qa"
+        
+        if not logs_dir.exists():
+            console.print(f"[bold red]logsフォルダが見つかりません: {logs_dir}[/bold red]")
+            raise typer.Exit(code=1)
+        
+        console.print(f"logsフォルダ: [cyan]{logs_dir}[/cyan]")
+        console.print(f"出力先qaフォルダ: [cyan]{qa_dir}[/cyan]")
+        
+        # XMLファイルを集約してqaフォルダに生成
+        from easy_dataset_cli.core import aggregate_logs_xml_to_qa
+        aggregate_logs_xml_to_qa(logs_dir, qa_dir)
+        
+        console.print(f"\n[bold green]✓[/bold green] 集約が完了しました！")
+        
+    except Exception as e:
+        console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 

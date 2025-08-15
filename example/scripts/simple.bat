@@ -1,0 +1,1 @@
+uv run easy-dataset generate .\example\input\documents\sample_document.txt  --ga-file .\example\output\sample_document\ga\ga_definitions.xml  --output-dir .\example\output\sample_document\ --use-thinking --append
