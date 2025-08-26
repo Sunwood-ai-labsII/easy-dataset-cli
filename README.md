@@ -57,13 +57,13 @@ pip install -e .
 export OPENAI_API_KEY="your-api-key-here"
 
 # 元の文章からGAペア定義を自動生成
-uv run easy-dataset create-ga .\example\input\documents\sample_document.txt --output-dir .\example\output\sample_document --num-ga-pairs 10
+uv run easy-dataset create-ga ./example/input/documents/sample_document.txt --output-dir ./example/output/sample_document --num-ga-pairs 2
 ```
 
 2. **Q&Aペアの生成**
 ```bash
 # GAペア定義を使ってQ&Aペアを生成
-uv run easy-dataset generate .\example\input\documents\sample_document.txt --ga-file .\example\output\sample_document\ga\ga_definitions.xml --output-dir .\example\output\sample_document\ --chunk-size 500
+uv run easy-dataset generate ./example/input/documents/sample_document.txt --ga-file ./example/output/sample_document/ga/ga_definitions.xml --output-dir ./example/output/sample_document/ --chunk-size 2000
 ```
 
 ### 🦙 Alpaca形式とHugging Face連携の使用例

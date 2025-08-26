@@ -6,6 +6,7 @@ requires-python = ">=3.9"
 dependencies = [
     "typer",               # CLIフレームワーク
     "rich",                # リッチなコンソール出力
+    "art",                 # ASCII art generation
     "litellm",             # LLM連携ライブラリ
     "langchain-text-splitters", # テキスト分割用
     "mistune",             # マークダウン解析用ライブラリ
@@ -15,8 +16,8 @@ dependencies = [
 ]
 
 [project.scripts]
-# "easy-dataset" コマンドで "easy_dataset_cli.main:app" を実行するよう設定
-easy-dataset = "easy_dataset_cli.main:app"
+# "easy-dataset" コマンドで "easy_dataset_cli.main:main" を実行するよう設定
+easy-dataset = "easy_dataset_cli.main:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
