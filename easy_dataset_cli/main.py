@@ -6,7 +6,16 @@ from typing_extensions import Annotated
 import typer
 from rich.console import Console
 from rich.progress import Progress
+from rich.text import Text
+from rich.panel import Panel
+from rich.columns import Columns
+from rich.table import Table
 from dotenv import load_dotenv
+try:
+    from art import tprint, text2art
+    ART_AVAILABLE = True
+except ImportError:
+    ART_AVAILABLE = False
 
 from .core import (
     split_text,
@@ -29,10 +38,69 @@ from .core import (
 load_dotenv()
 
 app = typer.Typer(
-    help="テキストファイルからQ&Aペアを生成するシンプルなCLIツール。",
+    help="テキストファイルからQ&Aペアを生成するおしゃれなCLIツール。",
     context_settings={"help_option_names": ["-h", "--help"]}
 )
 console = Console()
+
+def print_logo():
+    """おしゃれなロゴを表示"""
+    if ART_AVAILABLE:
+        console.print("\n")
+        # シンプルで読みやすいフォントを使用
+        try:
+            logo_text = text2art("Easy Dataset CLI", font="colossal")
+        except:
+            # フォールバックとして標準フォント
+            logo_text = text2art("Easy Dataset CLI")
+        
+        # 各行を中央揃えに調整
+        lines = logo_text.strip().split('\n')
+        max_width = max(len(line.rstrip()) for line in lines) if lines else 0
+        
+        # パネル内で中央揃えするため、Textオブジェクトを使用
+        logo_panel = Panel(
+            Text(logo_text.strip(), style="bold cyan", justify="center"),
+            title="[bold green]🚀 Easy Dataset CLI[/bold green]",
+            subtitle="[italic]Powered by AI[/italic]",
+            border_style="bright_blue",
+            padding=(1, 2),
+            expand=True  # 横幅一杯に展開
+        )
+        console.print(logo_panel)
+    else:
+        header = Panel(
+            Text("🚀 Easy Dataset CLI\nテキストからQ&Aペアを自動生成", style="bold cyan", justify="center"),
+            border_style="bright_blue",
+            padding=(1, 2),
+            expand=True  # 横幅一杯に展開
+        )
+        console.print(header)
+
+def print_success_summary(message: str, details: list = None):
+    """成功メッセージを美しく表示"""
+    panel = Panel(
+        f"[bold green]✨ {message}[/bold green]",
+        border_style="green",
+        padding=(1, 2)
+    )
+    console.print(panel)
+    
+    if details:
+        table = Table(show_header=False, box=None)
+        table.add_column("Item", style="cyan")
+        for detail in details:
+            table.add_row(f"  • {detail}")
+        console.print(table)
+
+def print_error_panel(error_msg: str):
+    """エラーメッセージを美しく表示"""
+    panel = Panel(
+        f"[bold red]❌ エラー[/bold red]\n{error_msg}",
+        border_style="red",
+        padding=(1, 2)
+    )
+    console.print(panel)
 
 
 @app.command()
@@ -55,32 +123,41 @@ def create_ga(
     )] = 5,
 ):
     """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
-    console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
+    print_logo()
+    
+    info_table = Table(show_header=False, box=None)
+    info_table.add_column("Key", style="bold cyan")
+    info_table.add_column("Value", style="white")
+    info_table.add_row("📄 入力ファイル", str(file_path))
+    info_table.add_row("📁 出力ディレクトリ", str(output_dir))
+    info_table.add_row("🤖 モデル", model)
+    info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
+    
+    console.print(Panel(info_table, title="[bold blue]🚀 GAペア生成設定[/bold blue]", border_style="blue"))
 
     try:
         text = file_path.read_text(encoding="utf-8")
-        console.print(f"[dim]読み込んだテキスト長: {len(text)} 文字[/dim]")
+        console.print(f"[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]\n")
 
-        console.print("[bold green]LLMに最適なGAペアを提案させています...[/bold green]")
-        xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs)
+        with console.status("[bold green]🤖 LLMにGAペアの提案を依頼中...[/bold green]"):
+            xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs)
 
         # 出力ディレクトリ構造を作成
         dirs = create_output_directories(output_dir)
-        console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
+        console.print(f"\n[dim]✓ 出力ディレクトリを作成: ga/, logs/, qa/[/dim]")
         
         # LLMのrawレスポンスをlogsディレクトリに保存
         raw_file_path = dirs["logs"] / "raw.md"
         raw_file_path.write_text(xml_content, encoding="utf-8")
-        console.print(f"[green]✓[/green] LLMのrawレスポンスを保存しました: [cyan]{raw_file_path}[/cyan]")
+        console.print(f"[green]✓[/green] LLMのrawレスポンスを保存: [cyan]{raw_file_path.name}[/cyan]")
 
-        console.print("[bold green]XMLからGAペアを解析しています...[/bold green]")
-        # XMLからGAペアを解析
-        ga_pairs = parse_ga_definitions_from_xml(xml_content)
+        with console.status("[bold green]🔍 XMLからGAペアを解析中...[/bold green]"):
+            # XMLからGAペアを解析
+            ga_pairs = parse_ga_definitions_from_xml(xml_content)
         
         if not ga_pairs:
-            console.print("[bold red]有効なGAペアが生成されませんでした。[/bold red]")
-            console.print("[yellow]生成されたXMLの内容を確認してください:[/yellow]")
-            console.print(xml_content)
+            print_error_panel("有効なGAペアが生成されませんでした。\n生成されたXMLの内容を確認してください。")
+            console.print(Panel(xml_content, title="生成されたXML", border_style="yellow"))
             raise typer.Exit(code=1)
 
         # 元のXMLファイルをgaディレクトリに保存（クリーンなXMLのみ）
@@ -91,24 +168,30 @@ def create_ga(
         if xml_start != -1 and xml_end != -1:
             clean_xml = xml_content[xml_start: xml_end + len("</GADefinitions>")]
             xml_file_path.write_text(clean_xml, encoding="utf-8")
-            console.print(f"[green]✓[/green] GA定義XMLファイルを保存しました: [cyan]{xml_file_path}[/cyan]")
+            console.print(f"[green]✓[/green] GA定義XMLファイルを保存: [cyan]{xml_file_path.name}[/cyan]")
 
         # Genreごとにマークダウンファイルをgaディレクトリに保存
         save_ga_definitions_by_genre(ga_pairs, dirs["ga"])
 
-        console.print(
-            f"\n[bold green]✓[/bold green] {len(ga_pairs)}個のGAペアを "
-            f"[cyan]{dirs['ga']}[/cyan] に保存しました。"
+        # 成功メッセージを美しく表示
+        details = [
+            f"{len(ga_pairs)}個のGAペアを生成",
+            f"保存先: {dirs['ga']}",
+            "XMLファイルとマークダウンファイルを作成"
+        ]
+        print_success_summary("GAペアの生成が完了しました！", details)
+        
+        next_steps_panel = Panel(
+            "🔍 生成されたファイルをレビュー\n"
+            "✏️ 必要に応じて編集\n"
+            "🚀 `generate` コマンドでQ&A生成へ",
+            title="[bold yellow]🔄 次のステップ[/bold yellow]",
+            border_style="yellow"
         )
-        console.print(
-            "[yellow]ヒント: 生成されたファイルをレビューし、必要に応じて編集してから "
-            "`generate` コマンドで使用してください。[/yellow]"
-        )
+        console.print(next_steps_panel)
 
     except Exception as e:
-        console.print(
-            f"[bold red]GA定義ファイルの生成中にエラーが発生しました:[/bold red] {e}"
-        )
+        print_error_panel(f"GA定義ファイルの生成中にエラーが発生しました:\n{e}")
         raise typer.Exit(code=1)
 
 
@@ -178,22 +261,45 @@ def generate(
     --use-fulltextオプションを使用すると、各チャンクの処理時に全文をコンテキストとして含めることで、
     より文脈を理解した高品質なQ&Aペアを生成できます。ただし、処理時間とAPIコストが増加します。
     """
+    print_logo()
+    
     try:
-        console.print(f"ファイルを読み込んでいます: [cyan]{file_path}[/cyan]")
+        # 設定情報をテーブルで表示
+        settings_table = Table(show_header=False, box=None)
+        settings_table.add_column("項目", style="bold cyan")
+        settings_table.add_column("値", style="white")
+        settings_table.add_row("📄 入力ファイル", str(file_path))
+        settings_table.add_row("📊 GA定義", str(ga_file))
+        settings_table.add_row("📁 出力先", str(output_dir) if output_dir else "コンソール")
+        settings_table.add_row("🤖 モデル", model)
+        settings_table.add_row("🔢 Q&A数/チャンク", str(num_qa_pairs))
+        
+        mode_options = []
+        if use_fulltext: mode_options.append("📋 全文コンテキスト")
+        if use_thinking: mode_options.append("🤔 思考フロー")
+        if append_mode: mode_options.append("➕ 追加モード")
+        if export_alpaca: mode_options.append("🤙 Alpaca形式")
+        if upload_hf: mode_options.append("🤗 HFアップロード")
+        
+        if mode_options:
+            settings_table.add_row("⚙️ オプション", ", ".join(mode_options))
+        
+        console.print(Panel(settings_table, title="[bold blue]🚀 Q&A生成設定[/bold blue]", border_style="blue"))
         text = file_path.read_text(encoding="utf-8")
+        console.print(f"\n[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]")
 
-        console.print(f"GAペアを解析しています: [cyan]{ga_file}[/cyan]")
-        ga_pairs = parse_ga_file(ga_file)
+        with console.status("🔍 GAペアを解析中..."):
+            ga_pairs = parse_ga_file(ga_file)
 
         if not ga_pairs:
-            console.print("[bold red]有効なGAペアが定義ファイルに見つかりませんでした。[/bold red]")
+            print_error_panel("有効なGAペアが定義ファイルに見つかりませんでした。")
             raise typer.Exit(code=1)
 
-        console.print(f"[green]{len(ga_pairs)}[/green] 個のGAペアを見つけました。")
+        console.print(f"\n[green]✓[/green] {len(ga_pairs)}個のGAペアを発見しました")
 
-        console.print("テキストをチャンクに分割しています...")
-        chunks = split_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
-        console.print(f"[green]{len(chunks)}[/green] 個のチャンクを作成しました。")
+        with console.status("✂️ テキストをチャンクに分割中..."):
+            chunks = split_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        console.print(f"[green]✓[/green] {len(chunks)}個のチャンクを作成しました")
 
         all_qa_pairs_with_ga = []
         total_tasks = len(chunks) * len(ga_pairs)
@@ -202,16 +308,22 @@ def generate(
         dirs = None
         if output_dir:
             dirs = create_output_directories(output_dir)
-            console.print(f"[dim]出力ディレクトリを作成しました: ga/, logs/, qa/[/dim]")
+            console.print(f"[dim]✓ 出力ディレクトリを作成: ga/, logs/, qa/[/dim]")
 
-        # 全文使用の場合は警告を表示
+        # モード警告を表示
+        warnings = []
         if use_fulltext:
-            console.print("[yellow]⚠ 全文コンテキストモードが有効です。処理時間とコストが増加する可能性があります。[/yellow]")
-            console.print(f"[dim]全文長: {len(text)} 文字[/dim]")
-
-        # 思考フロー使用の場合は警告を表示
+            warnings.append(f"📋 全文コンテキストモード ({len(text):,} 文字)")
         if use_thinking:
-            console.print("[yellow]⚠ 思考フローモードが有効です。各Q&Aに思考プロセスが追加されます。[/yellow]")
+            warnings.append("🤔 思考フローモード")
+        
+        if warnings:
+            warning_panel = Panel(
+                "\n".join(warnings) + "\n\n⚠️ 処理時間とAPIコストが増加する可能性があります",
+                title="[bold yellow]⚠️ モード警告[/bold yellow]",
+                border_style="yellow"
+            )
+            console.print(warning_panel)
 
         with Progress(console=console) as progress:
             task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
@@ -257,23 +369,30 @@ def generate(
                         description=f"Genre: {ga_pair['genre']['title']}"
                     )
 
-        console.print(
-            f"\n合計 [bold green]{len(all_qa_pairs_with_ga)}[/bold green] "
-            "個のQ&Aペアを生成しました。"
+        generation_summary = Panel(
+            f"✨ [bold green]{len(all_qa_pairs_with_ga)}[/bold green] 個のQ&Aペアを生成完了！",
+            title="[bold green]✅ 生成結果[/bold green]",
+            border_style="green"
         )
+        console.print(generation_summary)
 
         xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga, dirs["qa"] if dirs else None, append_mode)
 
         if dirs:
-            console.print(f"XMLファイルを [cyan]{dirs['qa']}[/cyan] に保存しています...")
-
-            for genre, xml_content in xml_outputs_by_genre.items():
-                safe_genre_name = sanitize_filename(genre)
-                output_file_path = dirs["qa"] / f"{safe_genre_name}.xml"
-                output_file_path.write_text(xml_content, encoding="utf-8")
-                console.print(f"  - [green]✓[/green] {output_file_path.name}")
-
-            console.print("\n[bold green]すべてのファイルの保存が完了しました。[/bold green]")
+            with console.status(f"💾 XMLファイルを {dirs['qa']} に保存中..."):
+                saved_files = []
+                for genre, xml_content in xml_outputs_by_genre.items():
+                    safe_genre_name = sanitize_filename(genre)
+                    output_file_path = dirs["qa"] / f"{safe_genre_name}.xml"
+                    output_file_path.write_text(xml_content, encoding="utf-8")
+                    saved_files.append(output_file_path.name)
+            
+            files_table = Table(show_header=False, box=None)
+            files_table.add_column("ファイル", style="cyan")
+            for file_name in saved_files:
+                files_table.add_row(f"✓ {file_name}")
+            
+                console.print(Panel(files_table, title="[bold green]💾 保存済みファイル[/bold green]", border_style="green"))
             
             # アルパカ形式でのエクスポート
             if export_alpaca:
@@ -309,12 +428,9 @@ def generate(
                 console.print(xml_content, overflow="fold")
     
     except Exception as e:
-        console.print(f"[bold red]エラーが発生しました:[/bold red]")
-        console.print(f"[bold red]エラータイプ:[/bold red] {type(e).__name__}")
-        console.print(f"[bold red]エラーメッセージ:[/bold red] {str(e)}")
-        console.print(f"[bold red]トレースバック:[/bold red]")
         import traceback
-        console.print(traceback.format_exc())
+        error_details = f"エラータイプ: {type(e).__name__}\nメッセージ: {str(e)}\n\nトレースバック:\n{traceback.format_exc()}"
+        print_error_panel(error_details)
         raise typer.Exit(code=1)
 
 
@@ -347,49 +463,66 @@ def convert_to_alpaca(
 ):
     """既存のXMLファイルをAlpaca形式のJSONに変換し、オプションでHugging Face Hubにアップロードします。"""
     
+    print_logo()
+    
+    conversion_table = Table(show_header=False, box=None)
+    conversion_table.add_column("項目", style="bold cyan")
+    conversion_table.add_column("値", style="white")
+    conversion_table.add_row("📁 入力ディレクトリ", str(qa_dir))
+    conversion_table.add_row("💾 出力ファイル", str(output_file) if output_file else "自動")
+    if upload_hf:
+        conversion_table.add_row("🤗 HFリポジトリ", hf_repo_name or "未指定")
+    
+    console.print(Panel(conversion_table, title="[bold blue]🔄 Alpaca形式変換[/bold blue]", border_style="blue"))
+    
     try:
         # デフォルトの出力ファイル名を設定
         if output_file is None:
             output_file = qa_dir.parent / "dataset_alpaca.json"
         
-        console.print(f"XMLファイルを変換中: [cyan]{qa_dir}[/cyan]")
-        
-        # アルパカ形式に変換
-        alpaca_data = convert_all_xml_to_alpaca(qa_dir, output_file)
+        with console.status(f"🔄 XMLファイルをAlpaca形式に変換中..."):
+            alpaca_data = convert_all_xml_to_alpaca(qa_dir, output_file)
         
         if not alpaca_data:
-            console.print("[bold red]変換できるデータが見つかりませんでした。[/bold red]")
+            print_error_panel("変換できるデータが見つかりませんでした。")
             raise typer.Exit(code=1)
         
-        # データセットカードを生成
-        readme_file = output_file.parent / "README.md"
-        create_dataset_card(alpaca_data, readme_file, "Converted QA Dataset")
+        with console.status("📋 データセットカードを生成中..."):
+            readme_file = output_file.parent / "README.md"
+            create_dataset_card(alpaca_data, readme_file, "Converted QA Dataset")
         
         # Hugging Face Hubにアップロード
         if upload_hf:
             if not hf_repo_name:
-                console.print("[bold red]--hf-repo-nameが指定されていません！[/bold red]")
-                console.print("[yellow]例: --hf-repo-name username/my-qa-dataset[/yellow]")
+                print_error_panel("--hf-repo-nameが指定されていません！\n例: --hf-repo-name username/my-qa-dataset")
                 raise typer.Exit(code=1)
             
-            console.print(f"\n[bold blue]Hugging Face Hubにアップロード中...[/bold blue]")
-            success = upload_to_huggingface(
-                dataset_data=alpaca_data,
-                repo_name=hf_repo_name,
-                hf_token=hf_token if hf_token else None,
-                private=hf_private,
-                commit_message=f"Upload converted QA dataset with {len(alpaca_data)} entries",
-                readme_file=readme_file
-            )
+            with console.status(f"🤗 Hugging Face Hubにアップロード中..."):
+                success = upload_to_huggingface(
+                    dataset_data=alpaca_data,
+                    repo_name=hf_repo_name,
+                    hf_token=hf_token if hf_token else None,
+                    private=hf_private,
+                    commit_message=f"Upload converted QA dataset with {len(alpaca_data)} entries",
+                    readme_file=readme_file
+                )
             
             if not success:
-                console.print("[bold red]Hugging Faceアップロードに失敗しました[/bold red]")
+                print_error_panel("Hugging Faceアップロードに失敗しました")
                 raise typer.Exit(code=1)
         
-        console.print(f"\n[bold green]✓[/bold green] 変換が完了しました！")
+        details = [
+            f"{len(alpaca_data)}個のエントリを変換",
+            f"出力先: {output_file}",
+            f"データセットカード: {readme_file}"
+        ]
+        if upload_hf and hf_repo_name:
+            details.append(f"Hugging Face: {hf_repo_name}")
+        
+        print_success_summary("Alpaca形式への変換が完了しました！", details)
         
     except Exception as e:
-        console.print(f"[bold red]変換中にエラーが発生しました:[/bold red] {e}")
+        print_error_panel(f"変換中にエラーが発生しました: {e}")
         raise typer.Exit(code=1)
 
 
@@ -401,28 +534,49 @@ def aggregate_logs(
     )]
 ):
     """logsフォルダ内のタイムスタンプ付きXMLファイルを集約してqaフォルダのXMLを生成します。"""
+    print_logo()
     
     try:
         logs_dir = output_dir / "logs"
         qa_dir = output_dir / "qa"
         
         if not logs_dir.exists():
-            console.print(f"[bold red]logsフォルダが見つかりません: {logs_dir}[/bold red]")
+            print_error_panel(f"logsフォルダが見つかりません: {logs_dir}")
             raise typer.Exit(code=1)
         
-        console.print(f"logsフォルダ: [cyan]{logs_dir}[/cyan]")
-        console.print(f"出力先qaフォルダ: [cyan]{qa_dir}[/cyan]")
+        aggregation_table = Table(show_header=False, box=None)
+        aggregation_table.add_column("項目", style="bold cyan")
+        aggregation_table.add_column("パス", style="white")
+        aggregation_table.add_row("📁 logsフォルダ", str(logs_dir))
+        aggregation_table.add_row("🎯 出力先", str(qa_dir))
         
-        # XMLファイルを集約してqaフォルダに生成
-        from easy_dataset_cli.core import aggregate_logs_xml_to_qa
-        aggregate_logs_xml_to_qa(logs_dir, qa_dir)
+        console.print(Panel(aggregation_table, title="[bold blue]📄 ログ集約[/bold blue]", border_style="blue"))
         
-        console.print(f"\n[bold green]✓[/bold green] 集約が完了しました！")
+        with console.status("🔄 XMLファイルを集約中..."):
+            from easy_dataset_cli.core import aggregate_logs_xml_to_qa
+            aggregate_logs_xml_to_qa(logs_dir, qa_dir)
+        
+        print_success_summary("ログ集約が完了しました！", [f"出力先: {qa_dir}"])
         
     except Exception as e:
-        console.print(f"[bold red]エラーが発生しました:[/bold red] {e}")
+        print_error_panel(f"エラーが発生しました: {e}")
         raise typer.Exit(code=1)
 
 
-if __name__ == "__main__":
+@app.command(name="help", hidden=True)
+def show_help():
+    """ヘルプを美しく表示"""
+    print_logo()
+    console.print(app.get_help(typer.Context(app)))
+
+
+def main():
+    """メイン関数 - ヘルプ時にロゴを表示"""
+    import sys
+    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] in ["-h", "--help"]):
+        print_logo()
     app()
+
+
+if __name__ == "__main__":
+    main()
