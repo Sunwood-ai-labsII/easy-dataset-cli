@@ -41,3 +41,8 @@ def get_ga_definition_generation_prompt() -> str:
 def get_qa_generation_with_thinking_prompt() -> str:
     """思考フロー対応Q&A生成プロンプトを取得"""
     return load_prompt_template("qa_generation_with_thinking")
+
+
+def get_qa_generation_with_surrounding_prompt() -> str:
+    """周辺チャンク付Q&A生成プロンプトを取得"""
+    return load_prompt_template("qa_generation_with_surrounding")
