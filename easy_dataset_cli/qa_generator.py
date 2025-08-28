@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from pathlib import Path
 from typing import List, Dict
-from litellm import completion
+from openai import OpenAI
 from rich.console import Console
 from dotenv import load_dotenv
 import traceback
@@ -35,7 +35,7 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
     logs_dir: Path = None,
     num_qa_pairs: int = None
 ) -> List[Dict[str, str]]:
-    """litellmを使い、1つのチャンクと全文、1つのGAペアからQ&Aペアのリストを生成する"""
+    """OpenAIクライアントを使い、1つのチャンクと全文、1つのGAペアからQ&Aペアのリストを生成する"""
     prompt_template = get_qa_generation_with_fulltext_prompt()
     prompt = prompt_template.format(
         chunk=chunk,
@@ -52,8 +52,11 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
         {"role": "user", "content": prompt}
     ]
 
-    # OpenRouter用の環境変数設定
-    os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
+    # OpenAIクライアントの初期化
+    client = OpenAI(
+        base_url=os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
 
     # タイムスタンプ付きログファイル名を生成
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -77,7 +80,10 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
                 json.dump(request_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
 
-        response = completion(model=model, messages=messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
         xml_content = response.choices[0].message.content
 
         # レスポンスログを保存
@@ -149,7 +155,7 @@ def generate_qa_for_chunk_with_ga(
     logs_dir: Path = None,
     num_qa_pairs: int = None
 ) -> List[Dict[str, str]]:
-    """litellmを使い、1つのチャンクと1つのGAペアからQ&Aペアのリストを生成する"""
+    """OpenAIクライアントを使い、1つのチャンクと1つのGAペアからQ&Aペアのリストを生成する"""
     prompt_template = get_qa_generation_prompt()
     prompt = prompt_template.format(
         context=chunk,
@@ -165,8 +171,11 @@ def generate_qa_for_chunk_with_ga(
         {"role": "user", "content": prompt}
     ]
 
-    # OpenRouter用の環境変数設定
-    os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
+    # OpenAIクライアントの初期化
+    client = OpenAI(
+        base_url=os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
 
     # タイムスタンプ付きログファイル名を生成
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -190,7 +199,10 @@ def generate_qa_for_chunk_with_ga(
                 json.dump(request_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
 
-        response = completion(model=model, messages=messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
         xml_content = response.choices[0].message.content
 
         # レスポンスログを保存
@@ -256,7 +268,7 @@ def generate_qa_for_chunk_with_ga(
 
 
 def generate_ga_definitions(text_content: str, model: str, num_ga_pairs: int = None) -> str:
-    """litellmを使い、元の文章からGAペア定義のXMLを生成する"""
+    """OpenAIクライアントを使い、元の文章からGAペア定義のXMLを生成する"""
     # LLMに渡すテキストは長すぎるとコストや性能に影響するため、先頭部分に限定する
     context = text_content[:8000]
     console.print(f"[dim]コンテキスト長: {len(context)} 文字[/dim]")
@@ -272,26 +284,23 @@ def generate_ga_definitions(text_content: str, model: str, num_ga_pairs: int = N
         {"role": "user", "content": prompt}
     ]
 
-    # OpenRouter用の環境変数設定
-    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    # APIキーの確認
+    api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        console.print("[bold red]OPENROUTER_API_KEYが設定されていません！[/bold red]")
-        raise ValueError("OPENROUTER_API_KEYが必要です")
+        console.print("[bold red]OPENAI_API_KEYが設定されていません！[/bold red]")
+        raise ValueError("OPENAI_API_KEYが必要です")
 
-    os.environ["OPENROUTER_API_KEY"] = api_key
-
-    # OpenRouterのモデル名に変換（必要に応じて）
-    if "openrouter" not in model and not model.startswith("openrouter/"):
-        if model.startswith("gpt-"):
-            model = f"openrouter/openai/{model}"
-        elif model.startswith("claude-"):
-            model = f"openrouter/anthropic/{model}"
-        else:
-            # デフォルトでopenrouterプレフィックスを追加
-            model = f"openrouter/{model}"
+    # OpenAIクライアントの初期化
+    client = OpenAI(
+        base_url=os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=api_key,
+    )
 
     try:
-        response = completion(model=model, messages=messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
         xml_content = response.choices[0].message.content
         console.print(f"[dim]LLMレスポンス長: {len(xml_content)} 文字[/dim]")
         return xml_content
@@ -574,7 +583,7 @@ def generate_qa_for_chunk_with_ga_and_thinking(
     logs_dir: Path = None,
     num_qa_pairs: int = None
 ) -> List[Dict[str, str]]:
-    """litellmを使い、1つのチャンクと全文、1つのGAペアから思考フロー付きQ&Aペアのリストを生成する"""
+    """OpenAIクライアントを使い、1つのチャンクと全文、1つのGAペアから思考フロー付きQ&Aペアのリストを生成する"""
     prompt_template = get_qa_generation_with_thinking_prompt()
     prompt = prompt_template.format(
         chunk=chunk,
@@ -591,8 +600,11 @@ def generate_qa_for_chunk_with_ga_and_thinking(
         {"role": "user", "content": prompt}
     ]
 
-    # OpenRouter用の環境変数設定
-    os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY", "")
+    # OpenAIクライアントの初期化
+    client = OpenAI(
+        base_url=os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
 
     # タイムスタンプ付きログファイル名を生成
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -616,7 +628,10 @@ def generate_qa_for_chunk_with_ga_and_thinking(
                 json.dump(request_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
 
-        response = completion(model=model, messages=messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
         xml_content = response.choices[0].message.content
 
         # レスポンスログを保存

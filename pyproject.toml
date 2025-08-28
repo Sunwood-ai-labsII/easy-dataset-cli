@@ -7,7 +7,7 @@ dependencies = [
     "typer",               # CLIフレームワーク
     "rich",                # リッチなコンソール出力
     "art",                 # ASCII art generation
-    "litellm",             # LLM連携ライブラリ
+    "openai",              # OpenAI API連携ライブラリ
     "langchain-text-splitters", # テキスト分割用
     "mistune",             # マークダウン解析用ライブラリ
     "python-dotenv",       # .env ファイル読み込み用
