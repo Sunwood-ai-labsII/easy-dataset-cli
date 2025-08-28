@@ -53,3 +53,7 @@ venv
 .venv
 
 uv.lock
+tests/
+.github
+
+test_output/
