@@ -35,6 +35,7 @@
 - **🔄 変換機能**: 既存XMLファイルからAlpaca形式への変換コマンド
 - **🔍 自動GA検出**: バッチ処理時に各ファイルに対応するGA定義を自動検出
 - **📁 バッチ処理強化**: 複数ファイルの同時処理と個別出力対応
+- **🌐 周辺コンテキストモード**: チャンク前後のチャンクをコンテキストとして活用し、文脈理解を向上
 
 ## 📦 インストール
 
@@ -107,6 +108,14 @@ uv run easy-dataset generate .\example\input\documents\sample_document.txt \
   --output-dir .\example\output\sample_document\ \
   --use-thinking \
   --use-fulltext
+
+# 周辺チャンクモードを使ったQ&A生成
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --use-surrounding-context \
+  --context-before 1 \
+  --context-after 2
 ```
 
 #### Hugging Face Hubへの直接アップロード
@@ -165,8 +174,35 @@ Options:
   --chunk-overlap INTEGER  チャンク間のオーバーラップサイズ [default: 200]
   -f, --use-fulltext       全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。
   -T, --use-thinking       各Q&Aペアに思考プロセスを追加して生成します。より深い理解と説明が可能になりますが、処理時間とコストが増加します。
+  -S, --use-surrounding-context 各チャンクの前後チャンクをコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。
+  --context-before INTEGER 周辺コンテキストとして含める前方チャンク数 [default: 1]
+  --context-after INTEGER  周辺コンテキストとして含める後方チャンク数 [default: 1]
   -h, --help               Show this message and exit
 ```
+
+#### 🔗 周辺コンテキストモード（`--use-surrounding-context`オプション）
+
+`--use-surrounding-context`オプションを使用すると、各チャンクの前後チャンクをコンテキストとして含めることで、より文脈を理解した高品質なQ&Aペアを生成できます。`--use-fulltext`よりも処理コストが低く抑えられます。
+
+- **`--context-before INTEGER`**: 前方のコンテキストとして含めるチャンク数（デフォルト: 1）
+- **`--context-after INTEGER`**: 後方のコンテキストとして含めるチャンク数（デフォルト: 1）
+
+**使用例:**
+```bash
+# 各チャンクの前後1チャンクずつをコンテキストとして使用
+uv run easy-dataset generate document.txt \
+  --ga-file ga_definitions.xml \
+  --use-surrounding-context
+
+# 前2チャンク、後1チャンクをコンテキストとして使用
+uv run easy-dataset generate document.txt \
+  --ga-file ga_definitions.xml \
+  --use-surrounding-context \
+  --context-before 2 \
+  --context-after 1
+```
+
+このモードは、長いドキュメントにおいて各チャンクの意味を理解するのに役立ち、トークンサイズ制限を回避しつつ文脈理解を向上させます。
 
 #### 📝 GA定義ファイルの自動検出機能
 
