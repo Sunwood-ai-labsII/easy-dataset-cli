@@ -57,3 +57,30 @@ def save_ga_definitions_by_genre(ga_pairs: List[Dict[str, Dict[str, str]]], ga_d
 def sanitize_filename(name: str) -> str:
     """ファイル名として安全な文字列に変換する"""
     return "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).rstrip()
+
+
+def find_text_files(directory: Path) -> List[Path]:
+    """指定されたディレクトリ内のテキストファイルを再帰的に検索する"""
+    text_extensions = {'.txt', '.md', '.rst', '.org', '.tex', '.text'}
+    text_files = []
+    
+    for file_path in directory.rglob('*'):
+        if file_path.is_file() and file_path.suffix.lower() in text_extensions:
+            text_files.append(file_path)
+    
+    return sorted(text_files)
+
+
+def batch_process_files(files: List[Path], processor_func, *args, **kwargs) -> Dict[str, any]:
+    """複数のファイルをバッチで処理する"""
+    results = {}
+    
+    for file_path in files:
+        try:
+            result = processor_func(file_path, *args, **kwargs)
+            results[str(file_path)] = result
+        except Exception as e:
+            console.print(f"[red]Error processing {file_path}: {e}[/red]")
+            results[str(file_path)] = None
+    
+    return results
