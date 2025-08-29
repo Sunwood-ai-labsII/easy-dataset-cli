@@ -36,6 +36,7 @@ from .core import (
     create_augmented_chunks,
     split_text
 )
+from .ga_parser import parse_ga_definitions_from_xml_improved
 from .batch_process import (
     _batch_create_ga_files,
     _batch_process_files
@@ -96,9 +97,12 @@ def create_ga(
         "--num-ga-pairs", "-g",
         help="生成するGAペアの数。指定しない場合はLLMが適切な数を決定します。"
     )] = 5,
+    max_context_length: Annotated[int, typer.Option(
+        "--max-context-length", "-l",
+        help="GA生成時にLLMに渡すコンテキストの最大文字数。デフォルトは8000文字です。処理時間を短くしたい場合やコストを抑えたい場合に小さく設定してください。"
+    )] = 8000,
 ):
     """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
-    print_logo()
 
     try:
         # フォルダかファイルかを判定
@@ -122,6 +126,7 @@ def create_ga(
             batch_info_table.add_row("📁 出力ディレクトリ", str(output_dir))
             batch_info_table.add_row("🤖 モデル", model)
             batch_info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
+            batch_info_table.add_row("📏 コンテキスト文字数上限", f"{max_context_length:,}")
 
             console.print(Panel(batch_info_table, title="[bold blue]🚀 バッチGAペア生成設定[/bold blue]", border_style="blue"))
 
@@ -135,7 +140,7 @@ def create_ga(
 
             console.print(Panel(files_table, title="[bold green]📄 処理予定ファイル[/bold green]", border_style="green"))
 
-            return _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs)
+            return _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs, max_context_length)
         else:
             # 単一ファイルの場合：既存の処理
             info_table = Table(show_header=False, box=None)
@@ -145,6 +150,7 @@ def create_ga(
             info_table.add_row("📁 出力ディレクトリ", str(output_dir))
             info_table.add_row("🤖 モデル", model)
             info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
+            info_table.add_row("📏 コンテキスト文字数上限", f"{max_context_length:,}")
 
             console.print(Panel(info_table, title="[bold blue]🚀 GAペア生成設定[/bold blue]", border_style="blue"))
 
@@ -152,7 +158,7 @@ def create_ga(
             console.print(f"[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]\n")
 
         with console.status("[bold green]🤖 LLMにGAペアの提案を依頼中...[/bold green]"):
-            xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs)
+            xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs, max_context_length=max_context_length)
 
         # 出力ディレクトリ構造を作成
         dirs = create_output_directories(output_dir)
@@ -164,8 +170,8 @@ def create_ga(
         console.print(f"[green]✓[/green] LLMのrawレスポンスを保存: [cyan]{raw_file_path.name}[/cyan]")
 
         with console.status("[bold green]🔍 XMLからGAペアを解析中...[/bold green]"):
-            # XMLからGAペアを解析
-            ga_pairs = parse_ga_definitions_from_xml(xml_content)
+            # XMLからGAペアを解析（改良版）
+            ga_pairs = parse_ga_definitions_from_xml_improved(xml_content)
 
         if not ga_pairs:
             print_error_panel("有効なGAペアが生成されませんでした。\n生成されたXMLの内容を確認してください。")
@@ -291,7 +297,6 @@ def generate(
     より文脈を理解した高品質なQ&Aペアを生成できます。--use-fulltextよりも処理コストが低く抑えられます。
     --context-beforeと--context-afterで前後のチャンク数を調整可能です。
     """
-    print_logo()
 
     try:
         # フォルダかファイルかを判定
@@ -610,8 +615,6 @@ def convert_to_alpaca(
 ):
     """既存のXMLファイルをAlpaca形式のJSONに変換し、オプションでHugging Face Hubにアップロードします。"""
 
-    print_logo()
-
     conversion_table = Table(show_header=False, box=None)
     conversion_table.add_column("項目", style="bold cyan")
     conversion_table.add_column("値", style="white")
@@ -680,8 +683,7 @@ def aggregate_logs(
         help="logsフォルダが含まれる出力ディレクトリへのパス。"
     )]
 ):
-    """logsフォルダ内のタイムスタンプ付きXMLファイルを集約してqaフォルダのXMLを生成します。"""
-    print_logo()
+    """logsフォルダ内のタイムスタンプ付きXMLファイルを集約してqaフォルダのXMLを生成します."""
 
     try:
         logs_dir = output_dir / "logs"
