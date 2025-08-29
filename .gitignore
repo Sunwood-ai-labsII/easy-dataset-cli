@@ -212,3 +212,8 @@ example/output/
 
 test_output/
 logs.txt
+
+example/input/toho/
+
+output/
+memo.md
