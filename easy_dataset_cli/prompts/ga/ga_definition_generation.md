@@ -22,33 +22,30 @@
 ---
 
 ## 出力形式:
-**必ず**、ルート要素が `<GADefinitions>` である単一の有効なXMLとして応答してください。XML以外の説明文は一切含めないでください。
-各GAペアは `<Pair>` タグで囲み、その中に `<Genre>` と `<Audience>` タグを含めてください。
+**絶対に守ること：**
+- 出力は、ルート要素が `<GADefinitions>` で始まる純粋なXMLのみにしてください
+- XML宣言 `<?xml version="1.0" encoding="utf-8"?>` を先頭に追加してください
+- ネストされたタグを含め、閉じタグまで完全に含めてください
+- 空白、改行、コードブロック記号（```や```xml）は一切出力しないでください
+- 説明文、コメント、追加のテキストは一切出力しないでください
 
-## 出力例:
-```xml
+**XML構造：**
+各GAペアは `<Pair>` タグで囲み、その中に `<Genre>` と `<Audience>` タグを含めてください。
+- `<Genre>` タグ内には `<Title>` と `<Description>` を含む
+- `<Audience>` タグ内には `<Title>` と `<Description>` を含む
+
+**実施例（この構造を完全にコピー）：**
 <GADefinitions>
 <Pair>
 <Genre>
 <Title>FAQ</Title>
-<Description>ユーザーがゲームに関する特定の質問に素早くアクセスできるような形式で、よくある質問に対する回答を簡潔にまとめる。</Description>
+<Description>ユーザーがテストに関する特定の質問に素早くアクセスできるような形式で、よくある質問に対する回答を簡潔にまとめたもの。</Description>
 </Genre>
 <Audience>
-<Title>初心者ゲーマー</Title>
-<Description>東方Projectや弾幕系シューティングゲームを初めてプレイする人々。ゲームの基本的な情報や攻略のヒントが欲しい。</Description>
-</Audience>
-</Pair>
-<Pair>
-<Genre>
-<Title>テクニカルガイド</Title>
-<Description>ゲームシステム、必要環境、インストール方法などの技術的な詳細を説明する形式。特に技術的な詳細に焦点を当てる。</Description>
-</Genre>
-<Audience>
-<Title>PCゲーミング愛好者</Title>
-<Description>PCでのゲームプレイに慣れているが、特に東方シリーズに関する技術的な詳細とトラブルシューティングガイドが求められる愛好者。</Description>
+<Title>初心者</Title>
+<Description>テストシステムやドキュメント生成を初めて扱う人々。基本的な概念や手順を手軽に学びたい人たち。</Description>
 </Audience>
 </Pair>
 </GADefinitions>
-```
 
 それでは、最適なGA定義の生成を開始してください。
