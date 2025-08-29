@@ -17,11 +17,11 @@ load_dotenv()
 console = Console()
 
 
-def generate_ga_definitions(text_content: str, model: str, num_ga_pairs: int = None) -> str:
+def generate_ga_definitions(text_content: str, model: str, num_ga_pairs: int = None, max_context_length: int = 8000) -> str:
     """OpenAIクライアントを使い、元の文章からGAペア定義のXMLを生成する"""
     # LLMに渡すテキストは長すぎるとコストや性能に影響するため、先頭部分に限定する
-    context = text_content[:8000]
-    console.print(f"[dim]コンテキスト長: {len(context)} 文字[/dim]")
+    context = text_content[:max_context_length]
+    console.print(f"[dim]コンテキスト長: {len(context)} 文字 (上限: {max_context_length})[/dim]")
 
     from ..prompts import get_ga_definition_generation_prompt
     prompt_template = get_ga_definition_generation_prompt()
