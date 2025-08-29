@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Dict
 import mistune
 from rich.console import Console
+import re
 
 console = Console()
 
@@ -68,9 +69,10 @@ def parse_ga_file(file_path: Path) -> List[Dict[str, Dict[str, str]]]:
             pairs = parse_ga_markdown_fallback(text)
 
     except ET.ParseError as e:
-        console.print(f"[yellow]XML解析エラー: {e}[/yellow]")
-        # XML解析に失敗した場合はマークダウン形式で解析を試行
-        pairs = parse_ga_markdown_fallback(text)
+        console.print(f"[red]XML解析エラー: {e}[/red]")
+        # XML解析に失敗した場合は改良版を試行
+        console.print("[yellow]改良版XML解析を試行中...[/yellow]")
+        pairs = parse_ga_definitions_from_xml_improved(text)
 
     console.print(f"[dim]最終的に解析されたペア数: {len(pairs)}[/dim]")
     return pairs
@@ -92,7 +94,7 @@ def parse_ga_markdown_fallback(text: str) -> List[Dict[str, Dict[str, str]]]:
 
         for node in ast:
             if node['type'] == 'heading':
-                header_text = "".join(child['text'] for child in node['children'])
+                header_text = "".join(child.get('text', '') for child in node['children'])
                 if 'genre' in header_text.lower():
                     current_type = 'genre'
                     genre['title'] = header_text.replace('Genre:', '').strip()
@@ -100,7 +102,7 @@ def parse_ga_markdown_fallback(text: str) -> List[Dict[str, Dict[str, str]]]:
                     current_type = 'audience'
                     audience['title'] = header_text.replace('Audience:', '').strip()
             elif node['type'] == 'paragraph':
-                description = "".join(child['text'] for child in node['children'])
+                description = "".join(child.get('text', '') for child in node['children'])
                 if current_type == 'genre':
                     genre['description'] = description
                 elif current_type == 'audience':
@@ -179,4 +181,76 @@ def parse_ga_definitions_from_xml(xml_content: str) -> List[Dict[str, Dict[str, 
     except Exception as e:
         console.print(f"[bold red]予期しないエラー:[/bold red] {e}")
 
+    return pairs
+
+
+def parse_ga_definitions_from_xml_improved(xml_content: str) -> List[Dict[str, Dict[str, str]]]:
+    """改良版: 正規表現を使い、コードブロックや不正なXMLを処理できるGA定義解析関数"""
+    pairs = []
+    console.print(f"[dim]XML解析開始: 内容長 {len(xml_content)} 文字[/dim]")
+
+    try:
+        # Step 1: 正規表現で<GADefinitions>ブロックを抽出
+        # re.DOTALLフラグにより、改行文字を含む文字列全体を検索対象にする
+        match = re.search(r"<GADefinitions>.*?</GADefinitions>", xml_content, re.DOTALL)
+
+        if not match:
+            console.print("[yellow]GADefinitionsタグで囲まれたXMLブロックが見つかりませんでした[/yellow]")
+            console.print("[yellow]フォールバック解析を試行中...[/yellow]")
+            return parse_ga_definitions_from_xml(xml_content)
+
+        raw_xml = match.group(0)
+        console.print(f"[dim]正規表現でXMLブロックを抽出完了: {len(raw_xml)} 文字[/dim]")
+
+        # Step 2: XML宣言を追加
+        if not raw_xml.startswith("<?xml"):
+            raw_xml = '<?xml version="1.0" encoding="utf-8"?>\n' + raw_xml
+
+        # Step 3: XML解析を実行
+        root = ET.fromstring(raw_xml)
+        pair_nodes = root.findall('Pair')
+        console.print(f"[dim]見つかったPairノード数: {len(pair_nodes)}[/dim]")
+
+        for i, pair_node in enumerate(pair_nodes):
+            genre_node = pair_node.find('Genre')
+            audience_node = pair_node.find('Audience')
+            
+            if genre_node is not None and audience_node is not None:
+                genre_title_node = genre_node.find('Title')
+                genre_desc_node = genre_node.find('Description')
+                audience_title_node = audience_node.find('Title')
+                audience_desc_node = audience_node.find('Description')
+
+                # 有効なデータが存在するかチェック
+                if all(node is not None and node.text and node.text.strip() for node in [genre_title_node, genre_desc_node, audience_title_node, audience_desc_node]):
+                    genre_title = genre_title_node.text.strip()
+                    audience_title = audience_title_node.text.strip()
+                    pairs.append({
+                        "genre": {
+                            "title": genre_title,
+                            "description": genre_desc_node.text.strip()
+                        },
+                        "audience": {
+                            "title": audience_title,
+                            "description": audience_desc_node.text.strip()
+                        }
+                    })
+                    console.print(f"[green]✓[/green] {genre_title} x {audience_title}")
+                else:
+                    console.print(f"[yellow]⚠[/yellow] Pair {i+1}: 要素が空または無効")
+            else:
+                console.print(f"[yellow]⚠[/yellow] Pair {i+1}: GenreまたはAudienceノードが見つからない")
+
+    except ET.ParseError as parse_error:
+        console.print(f"[bold red]XML解析エラー:[/bold red] {parse_error}")
+        console.print(f"[dim]パース失敗したXML内容: {raw_xml if 'raw_xml' in locals() else 'N/A'}[/dim]")
+        console.print("[yellow]フォールバック解析を試行中...[/yellow]")
+        return parse_ga_definitions_from_xml(xml_content)
+
+    except Exception as e:
+        console.print(f"[bold red]予期しないエラー:[/bold red] {e}")
+        console.print("[yellow]フォールバック解析を試行中...[/yellow]")
+        return parse_ga_definitions_from_xml(xml_content)
+
+    console.print(f"[dim]最終的に解析されたペア数: {len(pairs)}[/dim]")
     return pairs

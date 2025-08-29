@@ -15,6 +15,7 @@ from .core import (
     convert_to_xml_by_genre,
     create_output_directories
 )
+from .ga_parser import parse_ga_definitions_from_xml_improved
 
 # generatorsパッケージからインポート
 from .generators import (
@@ -28,7 +29,7 @@ from .generators import (
 console = Console()
 
 
-def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs):
+def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs, max_context_length=8000):
     """複数のテキストファイルからGAペアをバッチ生成する内部関数（各ファイルごとにフォルダを作成）"""
 
     from .core import create_output_directories, save_ga_definitions_by_genre, parse_ga_definitions_from_xml
@@ -52,7 +53,7 @@ def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs):
                 console.print(f"[dim]✓ テキスト長: {len(text):,} 文字[/dim]")
 
                 with console.status(f"[bold green]🤖 LLMにGAペアの提案を依頼中... ({text_file.name})[/bold green]"):
-                    xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs)
+                    xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs, max_context_length=max_context_length)
 
                 # LLMのrawレスポンスをlogsディレクトリに保存
                 raw_file_path = dirs["logs"] / "raw.md"
@@ -60,8 +61,8 @@ def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs):
                 console.print(f"[green]✓[/green] LLMのrawレスポンスを保存: [cyan]{raw_file_path.name}[/cyan]")
 
                 with console.status(f"[bold green]🔍 XMLからGAペアを解析中... ({text_file.name})[/bold green]"):
-                    # XMLからGAペアを解析
-                    ga_pairs = parse_ga_definitions_from_xml(xml_content)
+                    # XMLからGAペアを解析（改良版）
+                    ga_pairs = parse_ga_definitions_from_xml_improved(xml_content)
 
                 if not ga_pairs:
                     console.print(f"[yellow]警告: {text_file.name} からは有効なGAペアが生成されませんでした[/yellow]")
@@ -113,7 +114,7 @@ def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs):
     for file_name, output_path, ga_count in successful_files:
         files_table.add_row(file_name, str(output_path), str(ga_count))
 
-    console.print(Table(title="[bold green]📄 処理結果[/bold green]", border=True))
+    console.print(Table(title="[bold green]📄 処理結果[/bold green]", box=True))
     console.print(files_table)
 
     from .commands import print_success_summary
@@ -355,7 +356,7 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
     for file_name, output_path, qa_count, _ in successful_files:
         files_table.add_row(file_name, str(output_path), str(qa_count))
 
-    console.print(Table(title="[bold green]📄 処理結果[/bold green]", border=True))
+    console.print(Table(title="[bold green]📄 処理結果[/bold green]", box=True))
     console.print(files_table)
 
     from .commands import print_success_summary

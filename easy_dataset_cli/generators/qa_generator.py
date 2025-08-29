@@ -75,27 +75,78 @@ def generate_qa_for_chunk_with_ga(
                 json.dump(request_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
 
+            # プロンプトをマークダウンファイルとして保存
+            prompt_filename = f"prompt_{genre_safe}_{audience_safe}_{timestamp}.md"
+            prompt_file_path = logs_dir / prompt_filename
+            prompt_content = f"""# QA生成プロンプト
+
+**タイムスタンプ:** {timestamp}  
+**モデル:** {model}  
+**ジャンル:** {ga_pair['genre']['title']}  
+**オーディエンス:** {ga_pair['audience']['title']}  
+**プロンプト長:** {len(prompt)} 文字
+
+---
+
+## システムメッセージ
+
+{messages[0]['content']}
+
+---
+
+## ユーザープロンプト
+
+{prompt}
+"""
+            prompt_file_path.write_text(prompt_content, encoding='utf-8')
+            console.print(f"[dim]プロンプトファイルを保存: {prompt_filename}[/dim]")
+
+        # リクエスト送信時刻を記録
+        request_start = datetime.now()
+        
         response = client.chat.completions.create(
             model=model,
             messages=messages
         )
+        
+        # レスポンス受信時刻を記録
+        request_end = datetime.now()
+        processing_time = (request_end - request_start).total_seconds()
+        
         xml_content = response.choices[0].message.content
 
-        # レスポンスログを保存
+        # レスポンスログを保存（詳細情報付き）
         if logs_dir:
             response_log = {
-                "timestamp": timestamp,
-                "model": model,
-                "genre": ga_pair['genre']['title'],
-                "audience": ga_pair['audience']['title'],
-                "response_length": len(xml_content),
-                "response_content": xml_content
+                "metadata": {
+                    "timestamp": timestamp,
+                    "request_start": request_start.isoformat(),
+                    "request_end": request_end.isoformat(),
+                    "processing_time_seconds": processing_time,
+                    "model": model
+                },
+                "generation_context": {
+                    "genre": {
+                        "title": ga_pair['genre']['title'],
+                        "description": ga_pair['genre']['description'][:100] + "..." if len(ga_pair['genre']['description']) > 100 else ga_pair['genre']['description']
+                    },
+                    "audience": {
+                        "title": ga_pair['audience']['title'],
+                        "description": ga_pair['audience']['description'][:100] + "..." if len(ga_pair['audience']['description']) > 100 else ga_pair['audience']['description']
+                    },
+                    "chunk_length": len(chunk),
+                    "prompt_length": len(prompt)
+                },
+                "api_response": {
+                    "response_length": len(xml_content),
+                    "response_content": xml_content
+                }
             }
             response_filename = f"response_{genre_safe}_{audience_safe}_{timestamp}.json"
             response_file_path = logs_dir / response_filename
             with open(response_file_path, 'w', encoding='utf-8') as f:
                 json.dump(response_log, f, ensure_ascii=False, indent=2)
-            console.print(f"[dim]レスポンスログを保存: {response_filename}[/dim]")
+            console.print(f"[dim]レスポンスログを保存: {response_filename} (処理時間: {processing_time:.2f}s)[/dim]")
 
         # rawレスポンスを保存（オプション）
         if logs_dir:
@@ -108,9 +159,18 @@ def generate_qa_for_chunk_with_ga(
         # 生成したQAを保存
         if qa_pairs and logs_dir:
             qa_filename = f"qa_pairs_{genre_safe}_{audience_safe}_{timestamp}.xml"
-            qa_file_path = logs_dir / qa_filename
-
             _save_qa_pairs_to_xml(qa_pairs, logs_dir, qa_filename)
+
+        # 実行サマリーを保存
+        if logs_dir:
+            _save_execution_summary(logs_dir, timestamp, genre_safe, audience_safe, {
+                "processing_time": processing_time,
+                "qa_count": len(qa_pairs),
+                "success": True,
+                "chunk_length": len(chunk),
+                "prompt_length": len(prompt),
+                "response_length": len(xml_content)
+            })
 
         return qa_pairs
 
@@ -139,6 +199,19 @@ def generate_qa_for_chunk_with_ga(
             with open(error_file_path, 'w', encoding='utf-8') as f:
                 json.dump(error_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]エラーログを保存: {error_filename}[/dim]")
+
+        # エラー時もサマリーを保存
+        if logs_dir:
+            _save_execution_summary(logs_dir, timestamp, genre_safe, audience_safe, {
+                "processing_time": 0,
+                "qa_count": 0,
+                "success": False,
+                "error_type": type(general_error).__name__,
+                "error_message": str(general_error),
+                "chunk_length": len(chunk) if chunk else 0,
+                "prompt_length": len(prompt) if prompt else 0,
+                "response_length": 0
+            })
 
         return []
 
@@ -407,3 +480,68 @@ def _parse_answer_with_think(answer_text: str) -> Dict[str, str]:
             "think_content": "",
             "answer_content": answer_text
         }
+
+
+def _save_execution_summary(logs_dir: Path, timestamp: str, genre_safe: str, audience_safe: str, summary_data: Dict) -> None:
+    """実行サマリーをマークダウンとJSONで保存"""
+    if not logs_dir:
+        return
+    
+    # JSONサマリー
+    json_summary = {
+        "timestamp": timestamp,
+        "genre": genre_safe,
+        "audience": audience_safe,
+        "execution_summary": summary_data
+    }
+    
+    json_filename = f"summary_{genre_safe}_{audience_safe}_{timestamp}.json"
+    json_file_path = logs_dir / json_filename
+    with open(json_file_path, 'w', encoding='utf-8') as f:
+        json.dump(json_summary, f, ensure_ascii=False, indent=2)
+    
+    # マークダウンサマリー
+    md_filename = f"summary_{genre_safe}_{audience_safe}_{timestamp}.md"
+    md_file_path = logs_dir / md_filename
+    
+    status_emoji = "✅" if summary_data.get("success", False) else "❌"
+    
+    md_content = f"""# QA生成実行サマリー {status_emoji}
+
+**タイムスタンプ:** {timestamp}  
+**ジャンル:** {genre_safe.replace('_', ' ')}  
+**オーディエンス:** {audience_safe.replace('_', ' ')}  
+**ステータス:** {'成功' if summary_data.get('success', False) else '失敗'}
+
+## 📊 実行統計
+
+| 項目 | 値 |
+|------|-----|
+| 処理時間 | {summary_data.get('processing_time', 0):.2f}秒 |
+| 生成されたQA数 | {summary_data.get('qa_count', 0)}件 |
+| チャンク長 | {summary_data.get('chunk_length', 0):,}文字 |
+| プロンプト長 | {summary_data.get('prompt_length', 0):,}文字 |
+| レスポンス長 | {summary_data.get('response_length', 0):,}文字 |
+
+## 📁 関連ログファイル
+
+- `prompt_{genre_safe}_{audience_safe}_{timestamp}.md` - 使用したプロンプト
+- `request_{genre_safe}_{audience_safe}_{timestamp}.json` - リクエストログ  
+- `response_{genre_safe}_{audience_safe}_{timestamp}.json` - レスポンスログ
+- `qa_raw_{genre_safe}_{audience_safe}_{timestamp}.md` - 生RAWレスポンス
+"""
+
+    if summary_data.get("success", False):
+        md_content += f"- `qa_pairs_{genre_safe}_{audience_safe}_{timestamp}.xml` - 生成されたQAペア\n"
+    else:
+        md_content += f"""
+## ❌ エラー詳細
+
+**エラータイプ:** {summary_data.get('error_type', 'Unknown')}  
+**エラーメッセージ:** {summary_data.get('error_message', 'No message')}
+
+- `error_{genre_safe}_{audience_safe}_{timestamp}.json` - エラーログ
+"""
+    
+    md_file_path.write_text(md_content, encoding='utf-8')
+    console.print(f"[dim]実行サマリーを保存: {md_filename}[/dim]")

@@ -77,6 +77,32 @@ def generate_qa_for_chunk_with_ga_and_fulltext(
                 json.dump(request_log, f, ensure_ascii=False, indent=2)
             console.print(f"[dim]リクエストログを保存: {request_filename}[/dim]")
 
+            # プロンプトをマークダウンファイルとして保存
+            prompt_filename = f"prompt_fulltext_{genre_safe}_{audience_safe}_{timestamp}.md"
+            prompt_file_path = logs_dir / prompt_filename
+            prompt_content = f"""# QA生成プロンプト (全文付き)
+
+**タイムスタンプ:** {timestamp}  
+**モデル:** {model}  
+**ジャンル:** {ga_pair['genre']['title']}  
+**オーディエンス:** {ga_pair['audience']['title']}  
+**プロンプト長:** {len(prompt)} 文字
+
+---
+
+## システムメッセージ
+
+{messages[0]['content']}
+
+---
+
+## ユーザープロンプト
+
+{prompt}
+"""
+            prompt_file_path.write_text(prompt_content, encoding='utf-8')
+            console.print(f"[dim]プロンプトファイルを保存: {prompt_filename}[/dim]")
+
         response = client.chat.completions.create(
             model=model,
             messages=messages
