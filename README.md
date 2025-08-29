@@ -59,8 +59,14 @@ pip install -e .
 # 環境変数にAPIキーを設定
 export OPENAI_API_KEY="your-api-key-here"
 
-# 元の文章からGAペア定義を自動生成
+# 元の文章からGAペア定義を自動生成（デフォルト: 8000文字まで使用）
 uv run easy-dataset create-ga ./example/input/documents/sample_document.txt --output-dir ./example/output/sample_document --num-ga-pairs 2
+
+# より大きなファイルの場合、コンテキストを制限して処理時間を短くする
+uv run easy-dataset create-ga ./large_document.txt --output-dir ./output --num-ga-pairs 3 --max-context-length 4000
+
+# フォルダ内の全ファイルに対してGAペアをバッチ生成
+uv run easy-dataset create-ga ./example/input/documents/ --output-dir ./example/output/batch_ga_output --num-ga-pairs 2 --max-context-length 6000
 ```
 
 2. **Q&Aペアの生成**
@@ -74,13 +80,13 @@ uv run easy-dataset generate ./example/input/documents/sample_document.txt --ga-
 #### 複数ファイル（バッチ処理）の場合
 ```bash
 # 複数のテキストファイルをバッチ処理
-uv run easy-dataset generate ./example/input/documents/ --ga-file ./example/output/sample_document/ga/ga_definitions.xml --output-dir ./example/output/batch_output/ --chunk-size 2000
+uv run easy-dataset generate ./example/input/documents/ --ga-file ./example/output/sample_document/ga/ga_definitions.xml --output-dir ./example/output/batch_output/ --chunk-size 2000 --use-surrounding-context 
 ```
 
 #### 自動GA検出機能を使用したバッチ処理
 ```bash
 # 各ファイルに対応するGA定義を自動検出してバッチ処理
-uv run easy-dataset generate ./example/input/documents/ --ga-base-dir ./example/output/batch_ga_output/ --output-dir ./example/output/batch_qa_output/
+uv run easy-dataset generate ./example/input/documents/ --ga-base-dir ./example/output/batch_ga_output/ --output-dir ./example/output/batch_qa_output/ --chunk-size 2000 --use-surrounding-context 
 ```
 
 ### 🦙 Alpaca形式とHugging Face連携の使用例
@@ -149,13 +155,14 @@ uv run easy-dataset convert-to-alpaca .\example\output\sample_document\qa \
 uv run easy-dataset create-ga [OPTIONS] FILE_PATH
 
 Arguments:
-  FILE_PATH  GAペアの定義を生成するための元のテキストファイル [required]
+  FILE_PATH  GAペアの定義を生成するための元のテキストファイルまたはフォルダ [required]
 
 Options:
-  -o, --output-dir DIRECTORY  生成されたGAペア定義ファイルを保存するディレクトリ [required]
-  -m, --model TEXT           GAペア定義の生成に使用するLLMモデル名 [default: openrouter/openai/gpt-4o]
-  -g, --num-ga-pairs INTEGER 生成するGAペアの数。指定しない場合はLLMが適切な数を決定します
-  -h, --help                 Show this message and exit
+  -o, --output-dir DIRECTORY        生成されたGAペア定義ファイルを保存するディレクトリ [required]
+  -m, --model TEXT                 GAペア定義の生成に使用するLLMモデル名 [default: openrouter/openai/gpt-oss-120b]
+  -g, --num-ga-pairs INTEGER       生成するGAペアの数。指定しない場合はLLMが適切な数を決定します
+  -l, --max-context-length INTEGER GA生成時にLLMに渡すコンテキストの最大文字数[default: 8000]
+  -h, --help                       Show this message and exit
 ```
 
 #### 🔧 generate コマンド
