@@ -231,10 +231,16 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
 
                 if use_surrounding_context:
                     # 周辺コンテキストモードの処理
+                    # ドキュメント冒頭（最大3000文字）を付与して文脈の安定性を高める
+                    doc_head = text[:3000]
                     for i, (target_chunk, augmented_content, _) in enumerate(augmented_chunks):
                         for ga_pair in current_ga_pairs:
+                            content_with_head = (
+                                f"【ドキュメント冒頭（最大3000文字）】:\n{doc_head}\n\n" +
+                                augmented_content
+                            )
                             qa_pairs = generate_qa_for_chunk_with_surrounding_context(
-                                content=augmented_content,
+                                content=content_with_head,
                                 model=model,
                                 ga_pair=ga_pair,
                                 logs_dir=dirs["logs"],

@@ -99,7 +99,7 @@ def create_augmented_chunks(
             context_text = current_context.rstrip()
 
         # 対象チャンクとコンテキストを組み合わせ
-        augmented_content = f"【メイン本文】:\n{target_chunk}\n\n【周辺文脈】:\n{context_text}"
+        augmented_content = f"### 【メイン本文】: ------------- \n```\n{target_chunk}\n```\n\n ### 【周辺文脈】: -------------\n```\n{context_text}\n```"
 
         augmented_chunks.append((target_chunk, augmented_content, context_chunks))
 
