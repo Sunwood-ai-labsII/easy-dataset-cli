@@ -7,7 +7,6 @@ from pathlib import Path
 from typing_extensions import Annotated
 import typer
 from rich.console import Console
-from rich.progress import Progress
 from rich.text import Text
 from rich.panel import Panel
 from rich.columns import Columns
@@ -445,16 +444,15 @@ def generate(
             )
             console.print(warning_panel)
 
-        with Progress(console=console) as progress:
-            task = progress.add_task("[green]Q&Aペアを生成中...", total=total_tasks)
-
+        # tqdmベースの進捗表示に統一
+        from tqdm import tqdm
+        desc = "Q&A生成中"
+        iterable_outer = augmented_chunks if use_surrounding_context else chunks
+        with tqdm(total=total_tasks, desc=desc) as pbar:
             if use_surrounding_context:
-                # 周辺コンテキストモードの処理
-                # ドキュメント冒頭（最大3000文字）を付与して文脈の安定性を高める
                 doc_head = text[:3000]
-                for i, (target_chunk, augmented_content, _) in enumerate(augmented_chunks):
+                for i, (target_chunk, augmented_content, _) in enumerate(iterable_outer):
                     for ga_pair in ga_pairs:
-                        # 冒頭 + 既存の周辺文脈を結合
                         content_with_head = (
                             f"### 【ドキュメント冒頭（最大3000文字）】-----------:\n```\n{doc_head}\n```\n" +
                             augmented_content
@@ -476,13 +474,9 @@ def generate(
                             }
                             all_qa_pairs_with_ga.append(qa_entry)
 
-                        progress.update(
-                            task, advance=1,
-                            description=f"Genre: {ga_pair['genre']['title']}"
-                        )
+                        pbar.update(1)
             else:
-                # 通常モードの処理
-                for chunk in chunks:
+                for chunk in iterable_outer:
                     for ga_pair in ga_pairs:
                         if use_thinking:
                             qa_pairs = generate_qa_for_chunk_with_ga_and_thinking(
@@ -518,10 +512,7 @@ def generate(
                             }
                             all_qa_pairs_with_ga.append(qa_entry)
 
-                        progress.update(
-                            task, advance=1,
-                            description=f"Genre: {ga_pair['genre']['title']}"
-                        )
+                        pbar.update(1)
 
         generation_summary = Panel(
             f"✨ [bold green]{len(all_qa_pairs_with_ga)}[/bold green] 個のQ&Aペアを生成完了！",
