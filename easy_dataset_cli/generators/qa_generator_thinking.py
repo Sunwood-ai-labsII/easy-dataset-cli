@@ -59,10 +59,14 @@ def generate_qa_for_chunk_with_ga_and_thinking(
     )
 
     # タイムスタンプ付きログファイル名を生成
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     genre_safe = "".join(c for c in ga_pair['genre']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
     audience_safe = "".join(c for c in ga_pair['audience']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
 
+    # リトライ+タイムアウト設定
+    import time, random
+    max_retries = 3
+    timeout_sec = int(os.getenv("EASY_DATASET_TIMEOUT", "120"))
     try:
         # リクエストログを保存
         if logs_dir:
@@ -106,10 +110,26 @@ def generate_qa_for_chunk_with_ga_and_thinking(
             prompt_file_path.write_text(prompt_content, encoding='utf-8')
             console.print(f"[dim]プロンプトファイルを保存: {prompt_filename}[/dim]")
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages
-        )
+        # 送信（リトライ）
+        response = None
+        last_err = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    timeout=timeout_sec
+                )
+                break
+            except Exception as e:
+                last_err = e
+                wait_s = min(2 ** attempt + random.random(), 10)
+                console.print(f"[yellow]APIリトライ {attempt}/{max_retries} 失敗: {e}[/yellow]")
+                if attempt < max_retries:
+                    console.print(f"[dim]{wait_s:.1f}s 待機後に再試行[/dim]")
+                    time.sleep(wait_s)
+        if response is None:
+            raise last_err
         xml_content = response.choices[0].message.content
 
         # レスポンスログを保存
@@ -202,10 +222,14 @@ def generate_qa_for_chunk_with_surrounding_context(
     )
 
     # タイムスタンプ付きログファイル名を生成
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     genre_safe = "".join(c for c in ga_pair['genre']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
     audience_safe = "".join(c for c in ga_pair['audience']['title'] if c.isalnum() or c in (' ', '-', '_')).strip().replace(' ', '_')
 
+    # リトライ+タイムアウト設定
+    import time, random
+    max_retries = 3
+    timeout_sec = int(os.getenv("EASY_DATASET_TIMEOUT", "120"))
     try:
         # リクエストログを保存
         if logs_dir:
@@ -249,10 +273,26 @@ def generate_qa_for_chunk_with_surrounding_context(
             prompt_file_path.write_text(prompt_content, encoding='utf-8')
             console.print(f"[dim]プロンプトファイルを保存: {prompt_filename}[/dim]")
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages
-        )
+        # 送信（リトライ）
+        response = None
+        last_err = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    timeout=timeout_sec
+                )
+                break
+            except Exception as e:
+                last_err = e
+                wait_s = min(2 ** attempt + random.random(), 10)
+                console.print(f"[yellow]APIリトライ {attempt}/{max_retries} 失敗: {e}[/yellow]")
+                if attempt < max_retries:
+                    console.print(f"[dim]{wait_s:.1f}s 待機後に再試行[/dim]")
+                    time.sleep(wait_s)
+        if response is None:
+            raise last_err
         xml_content = response.choices[0].message.content
 
         # レスポンスログを保存
