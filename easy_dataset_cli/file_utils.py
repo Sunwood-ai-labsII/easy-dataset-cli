@@ -71,16 +71,4 @@ def find_text_files(directory: Path) -> List[Path]:
     return sorted(text_files)
 
 
-def batch_process_files(files: List[Path], processor_func, *args, **kwargs) -> Dict[str, any]:
-    """複数のファイルをバッチで処理する"""
-    results = {}
-    
-    for file_path in files:
-        try:
-            result = processor_func(file_path, *args, **kwargs)
-            results[str(file_path)] = result
-        except Exception as e:
-            console.print(f"[red]Error processing {file_path}: {e}[/red]")
-            results[str(file_path)] = None
-    
-    return results
+# バッチ処理ユーティリティは削除してシンプル化
