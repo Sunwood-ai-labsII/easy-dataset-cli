@@ -5,7 +5,7 @@
 
 from pathlib import Path
 from rich.console import Console
-from rich.progress import Progress
+from tqdm import tqdm
 
 from .core import (
     parse_ga_file,
@@ -37,10 +37,7 @@ def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs, max_cont
     total_files = len(text_files)
     successful_files = []
 
-    with Progress(console=console) as progress:
-        main_task = progress.add_task("[green]GAペアを生成中...", total=total_files)
-
-        for file_idx, text_file in enumerate(text_files):
+    for text_file in (tqdm(text_files, desc="GA生成中")):
             console.print(f"\n[bold cyan]処理中: {text_file.name}[/bold cyan]")
 
             try:
@@ -87,10 +84,51 @@ def _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs, max_cont
                 console.print(f"[red]エラー: {text_file.name} の処理に失敗しました: {e}[/red]")
                 continue
 
-            progress.update(
-                main_task, advance=1,
-                description=f"完了: {text_file.name}"
-            )
+            try:
+                # 各ファイルごとに専用フォルダを作成
+                file_output_dir = output_dir / text_file.stem
+                dirs = create_output_directories(file_output_dir)
+                console.print(f"[dim]✓ ファイル用ディレクトリを作成: {file_output_dir}[/dim]")
+
+                text = text_file.read_text(encoding="utf-8")
+                console.print(f"[dim]✓ テキスト長: {len(text):,} 文字[/dim]")
+
+                with console.status(f"[bold green]🤖 LLMにGAペアの提案を依頼中... ({text_file.name})[/bold green]"):
+                    xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs, max_context_length=max_context_length)
+
+                # LLMのrawレスポンスをlogsディレクトリに保存
+                raw_file_path = dirs["logs"] / "raw.md"
+                raw_file_path.write_text(xml_content, encoding="utf-8")
+                console.print(f"[green]✓[/green] LLMのrawレスポンスを保存: [cyan]{raw_file_path.name}[/cyan]")
+
+                with console.status(f"[bold green]🔍 XMLからGAペアを解析中... ({text_file.name})[/bold green]"):
+                    # XMLからGAペアを解析（改良版）
+                    ga_pairs = parse_ga_definitions_from_xml_improved(xml_content)
+
+                if not ga_pairs:
+                    console.print(f"[yellow]警告: {text_file.name} からは有効なGAペアが生成されませんでした[/yellow]")
+                    continue
+
+                # 元のXMLファイルをgaディレクトリに保存（クリーンなXMLのみ）
+                xml_file_path = dirs["ga"] / "ga_definitions.xml"
+                xml_start = xml_content.find("<GADefinitions>")
+                xml_end = xml_content.rfind("</GADefinitions>")
+                if xml_start != -1 and xml_end != -1:
+                    clean_xml = xml_content[xml_start: xml_end + len("</GADefinitions>")]
+                    xml_file_path.write_text(clean_xml, encoding="utf-8")
+                    console.print(f"[green]✓[/green] GA定義XMLファイルを保存: [cyan]{xml_file_path}[/cyan]")
+
+                # Genreごとにマークダウンファイルをgaディレクトリに保存
+                save_ga_definitions_by_genre(ga_pairs, dirs["ga"])
+
+                successful_files.append((text_file.name, file_output_dir, len(ga_pairs)))
+                console.print(f"[green]✓[/green] {len(ga_pairs)}個のGAペアを生成しました")
+
+            except Exception as e:
+                console.print(f"[red]エラー: {text_file.name} の処理に失敗しました: {e}[/red]")
+                continue
+
+    # tqdmでループ済み
 
     if not successful_files:
         print_error_panel("有効なGAペアが生成されませんでした。\n生成されたXMLの内容を確認してください。")
@@ -171,10 +209,7 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
     successful_files = []
     total_qa_pairs_generated = 0
 
-    with Progress(console=console) as progress:
-        main_task = progress.add_task("[green]ファイルを処理中...", total=total_files)
-
-        for file_idx, text_file in enumerate(text_files):
+    for text_file in (tqdm(text_files, desc="ファイル処理中")):
             console.print(f"\n[bold cyan]処理中: {text_file.name}[/bold cyan]")
 
             try:
@@ -227,7 +262,10 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
 
                 all_qa_pairs_with_ga = []
                 total_tasks_for_file = len(chunks) * len(current_ga_pairs)
-                file_task = progress.add_task(f"[blue]{text_file.name}", total=total_tasks_for_file)
+                # tqdmサブバー
+                from tqdm import tqdm as _tqdm
+                pbar_ctx = _tqdm(total=total_tasks_for_file, desc=text_file.name, leave=False)
+                # 進捗の更新は後続のループ内で行う
 
                 if use_surrounding_context:
                     # 周辺コンテキストモードの処理
@@ -256,10 +294,7 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
                                 }
                                 all_qa_pairs_with_ga.append(qa_entry)
 
-                            progress.update(
-                                file_task, advance=1,
-                                description=f"Genre: {ga_pair['genre']['title']}"
-                            )
+                            pbar_ctx.update(1)
                 else:
                     # 通常モードの処理
                     for chunk in chunks:
@@ -298,12 +333,9 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
                                 }
                                 all_qa_pairs_with_ga.append(qa_entry)
 
-                            progress.update(
-                                file_task, advance=1,
-                                description=f"Genre: {ga_pair['genre']['title']}"
-                            )
-
-                progress.remove_task(file_task)
+                            pbar_ctx.update(1)
+                # close tqdm sub-bar if used
+                pbar_ctx.close()
 
                 # このファイルのQ&AペアをXMLに変換して保存
                 xml_outputs_by_genre = convert_to_xml_by_genre(all_qa_pairs_with_ga, dirs["qa"], append_mode)
@@ -334,10 +366,7 @@ def _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, ch
                 console.print(f"[red]エラー: {text_file.name} の処理に失敗しました: {e}[/red]")
                 continue
 
-            progress.update(
-                main_task, advance=1,
-                description=f"完了: {text_file.name}"
-            )
+    # tqdmで外側ループ済み
 
     if not successful_files:
         from .commands import print_error_panel
