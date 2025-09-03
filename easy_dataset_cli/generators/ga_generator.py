@@ -47,14 +47,28 @@ def generate_ga_definitions(text_content: str, model: str, num_ga_pairs: int = N
         api_key=api_key,
     )
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages
-        )
-        xml_content = response.choices[0].message.content
-        console.print(f"[dim]LLMレスポンス長: {len(xml_content)} 文字[/dim]")
-        return xml_content
-    except Exception as error:
-        console.print(f"[bold red]GA定義の生成中にエラーが発生しました:[/bold red] {error}")
-        raise
+    # リトライ+タイムアウト付きリクエスト
+    import time
+    import random
+    max_retries = 3
+    timeout_sec = int(os.getenv("EASY_DATASET_TIMEOUT", "120"))
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                timeout=timeout_sec
+            )
+            xml_content = response.choices[0].message.content
+            console.print(f"[dim]LLMレスポンス長: {len(xml_content)} 文字[/dim]")
+            return xml_content
+        except Exception as error:
+            last_err = error
+            wait_s = min(2 ** attempt + random.random(), 10)
+            console.print(f"[yellow]GA生成リトライ {attempt}/{max_retries} 失敗: {error}[/yellow]")
+            if attempt < max_retries:
+                console.print(f"[dim]{wait_s:.1f}s 待機後に再試行[/dim]")
+                time.sleep(wait_s)
+    console.print(f"[bold red]GA定義の生成に失敗:[/bold red] {last_err}")
+    raise last_err

@@ -23,8 +23,7 @@ from .file_utils import (
     create_output_directories,
     save_ga_definitions_by_genre,
     sanitize_filename,
-    find_text_files,
-    batch_process_files
+    find_text_files
 )
 from .alpaca_converter import (
     convert_all_xml_to_alpaca,
@@ -60,7 +59,6 @@ __all__ = [
     'save_ga_definitions_by_genre',
     'sanitize_filename',
     'find_text_files',
-    'batch_process_files',
     
     # アルパカ変換・アップロード
     'convert_all_xml_to_alpaca',
