@@ -30,16 +30,10 @@ from .core import (
     convert_all_xml_to_alpaca,
     upload_to_huggingface,
     create_dataset_card,
-    find_text_files,
-    get_chunk_with_surrounding_context,
     create_augmented_chunks,
     split_text
 )
 from .ga_parser import parse_ga_definitions_from_xml_improved
-from .batch_process import (
-    _batch_create_ga_files,
-    _batch_process_files
-)
 
 # .envファイルを読み込む
 load_dotenv()
@@ -82,7 +76,7 @@ def print_error_panel(error_msg: str):
 def create_ga(
     file_path: Annotated[Path, typer.Argument(
         exists=True, readable=True,
-        help="GAペアの定義を生成するための元のテキストファイルまたはフォルダ。フォルダを指定した場合、内部のテキストファイルをバッチ処理します。"
+        help="GAペア定義を生成する元のテキストファイル。"
     )],
     output_dir: Annotated[Path, typer.Option(
         "--output-dir", "-o", file_okay=False, dir_okay=True, writable=True,
@@ -104,57 +98,23 @@ def create_ga(
     """元の文章を分析し、GAペア定義をXML形式で生成し、Genreごとにマークダウンファイルに保存します。"""
 
     try:
-        # フォルダかファイルかを判定
         if file_path.is_dir():
-            # フォルダの場合：バッチ処理
-            console.print(f"[bold blue]📁 フォルダ処理モード: {file_path}[/bold blue]")
-            text_files = find_text_files(file_path)
+            print_error_panel("フォルダは指定できません。テキストファイルを指定してください。")
+            raise typer.Exit(code=1)
 
-            if not text_files:
-                print_error_panel(f"指定されたフォルダにテキストファイルが見つかりませんでした: {file_path}")
-                raise typer.Exit(code=1)
+        info_table = Table(show_header=False, box=None)
+        info_table.add_column("Key", style="bold cyan")
+        info_table.add_column("Value", style="white")
+        info_table.add_row("📄 入力ファイル", str(file_path))
+        info_table.add_row("📁 出力ディレクトリ", str(output_dir))
+        info_table.add_row("🤖 モデル", model)
+        info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
+        info_table.add_row("📏 コンテキスト文字数上限", f"{max_context_length:,}")
 
-            console.print(f"[green]✓[/green] {len(text_files)}個のテキストファイルを発見しました")
+        console.print(Panel(info_table, title="[bold blue]🚀 GAペア生成設定[/bold blue]", border_style="blue"))
 
-            # バッチ処理用の設定テーブル
-            batch_info_table = Table(show_header=False, box=None)
-            batch_info_table.add_column("Key", style="bold cyan")
-            batch_info_table.add_column("Value", style="white")
-            batch_info_table.add_row("📁 入力フォルダ", str(file_path))
-            batch_info_table.add_row("📄 ファイル数", str(len(text_files)))
-            batch_info_table.add_row("📁 出力ディレクトリ", str(output_dir))
-            batch_info_table.add_row("🤖 モデル", model)
-            batch_info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
-            batch_info_table.add_row("📏 コンテキスト文字数上限", f"{max_context_length:,}")
-
-            console.print(Panel(batch_info_table, title="[bold blue]🚀 バッチGAペア生成設定[/bold blue]", border_style="blue"))
-
-            # ファイル一覧を表示
-            files_table = Table(show_header=False, box=None)
-            files_table.add_column("ファイル", style="cyan")
-            for text_file in text_files[:10]:  # 最初の10個のみ表示
-                files_table.add_row(f"• {text_file.name}")
-            if len(text_files) > 10:
-                files_table.add_row(f"... and {len(text_files) - 10} more files")
-
-            console.print(Panel(files_table, title="[bold green]📄 処理予定ファイル[/bold green]", border_style="green"))
-
-            return _batch_create_ga_files(text_files, output_dir, model, num_ga_pairs, max_context_length)
-        else:
-            # 単一ファイルの場合：既存の処理
-            info_table = Table(show_header=False, box=None)
-            info_table.add_column("Key", style="bold cyan")
-            info_table.add_column("Value", style="white")
-            info_table.add_row("📄 入力ファイル", str(file_path))
-            info_table.add_row("📁 出力ディレクトリ", str(output_dir))
-            info_table.add_row("🤖 モデル", model)
-            info_table.add_row("🔢 GAペア数", str(num_ga_pairs))
-            info_table.add_row("📏 コンテキスト文字数上限", f"{max_context_length:,}")
-
-            console.print(Panel(info_table, title="[bold blue]🚀 GAペア生成設定[/bold blue]", border_style="blue"))
-
-            text = file_path.read_text(encoding="utf-8")
-            console.print(f"[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]\n")
+        text = file_path.read_text(encoding="utf-8")
+        console.print(f"[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]\n")
 
         with console.status("[bold green]🤖 LLMにGAペアの提案を依頼中...[/bold green]"):
             xml_content = generate_ga_definitions(text, model=model, num_ga_pairs=num_ga_pairs, max_context_length=max_context_length)
@@ -216,15 +176,11 @@ def create_ga(
 def generate(
     file_path: Annotated[Path, typer.Argument(
         exists=True, readable=True,
-        help="元のテキストファイルまたはフォルダへのパス。フォルダを指定した場合、内部のテキストファイルをバッチ処理します。"
+        help="元のテキストファイルへのパス。"
     )],
     ga_file: Annotated[Path, typer.Option(
         "--ga-file", "-g", exists=True, dir_okay=False, readable=True,
-        help="Genre-Audienceペアを定義したXMLまたはMarkdownファイルへのパス。バッチ処理で全ファイルに共通の定義を適用する場合に使用します。"
-    )] = None,
-    ga_base_dir: Annotated[Path, typer.Option(
-        "--ga-base-dir", "-gb", exists=True, file_okay=False, dir_okay=True, readable=True,
-        help="GA定義フォルダの親ディレクトリ。バッチ処理時に各入力ファイルに対応するGA定義を自動検出する場合に使用します。"
+        help="Genre-Audienceペアを定義したXMLまたはMarkdownファイルへのパス。"
     )] = None,
     output_dir: Annotated[Path, typer.Option(
         "--output-dir", "-o", file_okay=False, dir_okay=True, writable=True,
@@ -286,6 +242,10 @@ def generate(
         "--hf-private",
         help="Hugging Faceリポジトリをプライベートにします。"
     )] = False,
+    parallel: Annotated[int, typer.Option(
+        "--parallel", "-P",
+        help="並列ワーカー数。2以上で並列、1で逐次。"
+    )] = 1,
 ):
     """テキストファイルとGA定義からQ&Aペアを生成し、Genre別のXMLファイルとして出力します。
 
@@ -298,106 +258,41 @@ def generate(
     """
 
     try:
-        # フォルダかファイルかを判定
+        # 単一ファイルのみ対応
         if file_path.is_dir():
-            # フォルダの場合：バッチ処理
-            console.print(f"[bold blue]📁 フォルダ処理モード: {file_path}[/bold blue]")
-            text_files = find_text_files(file_path)
+            print_error_panel("フォルダは指定できません。テキストファイルを指定してください。")
+            raise typer.Exit(code=1)
 
-            if not text_files:
-                print_error_panel(f"指定されたフォルダにテキストファイルが見つかりませんでした: {file_path}")
-                raise typer.Exit(code=1)
+        # 設定情報をテーブルで表示
+        settings_table = Table(show_header=False, box=None)
+        settings_table.add_column("項目", style="bold cyan")
+        settings_table.add_column("値", style="white")
+        settings_table.add_row("📄 入力ファイル", str(file_path))
+        settings_table.add_row("📊 GA定義", str(ga_file) if ga_file else "未指定")
+        settings_table.add_row("📁 出力先", str(output_dir) if output_dir else "コンソール")
+        settings_table.add_row("🤖 モデル", model)
+        settings_table.add_row("🔢 Q&A数/チャンク", str(num_qa_pairs))
 
-            console.print(f"[green]✓[/green] {len(text_files)}個のテキストファイルを発見しました")
+        mode_options = []
+        if use_fulltext: mode_options.append("📋 全文コンテキスト")
+        if use_thinking: mode_options.append("🤔 思考フロー")
+        if use_surrounding_context: mode_options.append(f"🔗 周辺コンテキスト ({context_before}前+{context_after}後)")
+        if append_mode: mode_options.append("➕ 追加モード")
+        if export_alpaca: mode_options.append("🤙 Alpaca形式")
+        if upload_hf: mode_options.append("🤗 HFアップロード")
+        if parallel and parallel >= 2: mode_options.append(f"⚡ 並列 {parallel} ワーカー")
 
-            # バッチ処理用の設定テーブル
-            batch_settings_table = Table(show_header=False, box=None)
-            batch_settings_table.add_column("項目", style="bold cyan")
-            batch_settings_table.add_column("値", style="white")
-            batch_settings_table.add_row("📁 入力フォルダ", str(file_path))
-            batch_settings_table.add_row("📄 ファイル数", str(len(text_files)))
+        if mode_options:
+            settings_table.add_row("⚙️ オプション", ", ".join(mode_options))
 
-            # GA定義の表示
-            if ga_file:
-                batch_settings_table.add_row("📊 GA定義", str(ga_file))
-            elif ga_base_dir:
-                batch_settings_table.add_row("📊 GA定義ベースディレクトリ", str(ga_base_dir))
-            else:
-                batch_settings_table.add_row("📊 GA定義", "未指定")
+        console.print(Panel(settings_table, title="[bold blue]🚀 Q&A生成設定[/bold blue]", border_style="blue"))
 
-            batch_settings_table.add_row("📁 出力先", str(output_dir) if output_dir else "コンソール")
-            batch_settings_table.add_row("🤖 モデル", model)
-            batch_settings_table.add_row("🔢 Q&A数/チャンク", str(num_qa_pairs))
+        if not ga_file:
+            print_error_panel("単一ファイル処理には --ga-file の指定が必須です。")
+            raise typer.Exit(code=1)
 
-            mode_options = []
-            if use_fulltext: mode_options.append("📋 全文コンテキスト")
-            if use_thinking: mode_options.append("🤔 思考フロー")
-            if use_surrounding_context: mode_options.append(f"🔗 周辺コンテキスト ({context_before}前+{context_after}後)")
-            if append_mode: mode_options.append("➕ 追加モード")
-            if export_alpaca: mode_options.append("🤙 Alpaca形式")
-            if upload_hf: mode_options.append("🤗 HFアップロード")
-
-            if mode_options:
-                batch_settings_table.add_row("⚙️ オプション", ", ".join(mode_options))
-
-            console.print(Panel(batch_settings_table, title="[bold blue]🚀 バッチQ&A生成設定[/bold blue]", border_style="blue"))
-
-            # ファイル一覧を表示
-            files_table = Table(show_header=False, box=None)
-            files_table.add_column("ファイル", style="cyan")
-            for text_file in text_files[:10]:  # 最初の10個のみ表示
-                files_table.add_row(f"• {text_file.name}")
-            if len(text_files) > 10:
-                files_table.add_row(f"... and {len(text_files) - 10} more files")
-
-            console.print(Panel(files_table, title="[bold green]📄 処理予定ファイル[/bold green]", border_style="green"))
-
-            # バッチ処理のバリデーション
-            if not ga_file and not ga_base_dir:
-                print_error_panel("バッチ処理を行うには、--ga-file または --ga-base-dir のいずれかを指定する必要があります。")
-                raise typer.Exit(code=1)
-
-            if ga_file and ga_base_dir:
-                print_error_panel("--ga-file と --ga-base-dir は同時に使用できません。")
-                raise typer.Exit(code=1)
-
-            # 各ファイルをバッチ処理
-            return _batch_process_files(text_files, ga_file, ga_base_dir, output_dir, model, chunk_size, chunk_overlap,
-                                      num_qa_pairs, use_fulltext, use_thinking, use_surrounding_context,
-                                      context_before, context_after, append_mode,
-                                      export_alpaca, upload_hf, hf_repo_name, hf_token, hf_private)
-        else:
-            # 単一ファイルの場合：既存の処理
-            # 設定情報をテーブルで表示
-            settings_table = Table(show_header=False, box=None)
-            settings_table.add_column("項目", style="bold cyan")
-            settings_table.add_column("値", style="white")
-            settings_table.add_row("📄 入力ファイル", str(file_path))
-            settings_table.add_row("📊 GA定義", str(ga_file) if ga_file else "未指定")
-            settings_table.add_row("📁 出力先", str(output_dir) if output_dir else "コンソール")
-            settings_table.add_row("🤖 モデル", model)
-            settings_table.add_row("🔢 Q&A数/チャンク", str(num_qa_pairs))
-
-            mode_options = []
-            if use_fulltext: mode_options.append("📋 全文コンテキスト")
-            if use_thinking: mode_options.append("🤔 思考フロー")
-            if use_surrounding_context: mode_options.append(f"🔗 周辺コンテキスト ({context_before}前+{context_after}後)")
-            if append_mode: mode_options.append("➕ 追加モード")
-            if export_alpaca: mode_options.append("🤙 Alpaca形式")
-            if upload_hf: mode_options.append("🤗 HFアップロード")
-
-            if mode_options:
-                settings_table.add_row("⚙️ オプション", ", ".join(mode_options))
-
-            console.print(Panel(settings_table, title="[bold blue]🚀 Q&A生成設定[/bold blue]", border_style="blue"))
-
-            # 単一ファイル処理のバリデーション
-            if not ga_file:
-                print_error_panel("単一ファイル処理には --ga-file の指定が必須です。")
-                raise typer.Exit(code=1)
-
-            text = file_path.read_text(encoding="utf-8")
-            console.print(f"\n[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]")
+        text = file_path.read_text(encoding="utf-8")
+        console.print(f"\n[dim]✓ テキスト長: {len(text):,} 文字を読み込みました[/dim]")
 
         with console.status("🔍 GAペアを解析中..."):
             ga_pairs = parse_ga_file(ga_file)
@@ -444,75 +339,94 @@ def generate(
             )
             console.print(warning_panel)
 
-        # tqdmベースの進捗表示に統一
+        # 進捗表示 + 並列処理
         from tqdm import tqdm
         desc = "Q&A生成中"
         iterable_outer = augmented_chunks if use_surrounding_context else chunks
+
+        # タスクの整列
+        tasks = []
+        if use_surrounding_context:
+            doc_head = text[:3000]
+            for (target_chunk, augmented_content, _ctx) in iterable_outer:
+                for ga_pair in ga_pairs:
+                    content_with_head = (
+                        f"### 【ドキュメント冒頭（最大3000文字）】-----------:\n```\n{doc_head}\n```\n" +
+                        augmented_content
+                    )
+                    tasks.append(("surrounding", content_with_head, ga_pair))
+        else:
+            for chunk in iterable_outer:
+                for ga_pair in ga_pairs:
+                    if use_thinking:
+                        tasks.append(("thinking", chunk, ga_pair))
+                    elif use_fulltext:
+                        tasks.append(("fulltext", chunk, ga_pair))
+                    else:
+                        tasks.append(("basic", chunk, ga_pair))
+
+        def run_task(task):
+            mode, payload, ga_pair = task
+            if mode == "surrounding":
+                qa_pairs = generate_qa_for_chunk_with_surrounding_context(
+                    content=payload,
+                    model=model,
+                    ga_pair=ga_pair,
+                    logs_dir=dirs["logs"] if dirs else None,
+                    num_qa_pairs=num_qa_pairs
+                )
+            elif mode == "thinking":
+                qa_pairs = generate_qa_for_chunk_with_ga_and_thinking(
+                    chunk=payload,
+                    full_text=text if use_fulltext else "",
+                    model=model,
+                    ga_pair=ga_pair,
+                    logs_dir=dirs["logs"] if dirs else None,
+                    num_qa_pairs=num_qa_pairs
+                )
+            elif mode == "fulltext":
+                qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
+                    chunk=payload,
+                    full_text=text,
+                    model=model,
+                    ga_pair=ga_pair,
+                    logs_dir=dirs["logs"] if dirs else None,
+                    num_qa_pairs=num_qa_pairs
+                )
+            else:  # basic
+                qa_pairs = generate_qa_for_chunk_with_ga(
+                    payload, model=model, ga_pair=ga_pair,
+                    logs_dir=dirs["logs"] if dirs else None,
+                    num_qa_pairs=num_qa_pairs
+                )
+
+            # ga情報付与
+            result = []
+            for pair in qa_pairs:
+                result.append({
+                    "genre": ga_pair['genre']['title'],
+                    "audience": ga_pair['audience']['title'],
+                    "question": pair['question'],
+                    "answer": pair['answer']
+                })
+            return result
+
         with tqdm(total=total_tasks, desc=desc) as pbar:
-            if use_surrounding_context:
-                doc_head = text[:3000]
-                for i, (target_chunk, augmented_content, _) in enumerate(iterable_outer):
-                    for ga_pair in ga_pairs:
-                        content_with_head = (
-                            f"### 【ドキュメント冒頭（最大3000文字）】-----------:\n```\n{doc_head}\n```\n" +
-                            augmented_content
-                        )
-                        qa_pairs = generate_qa_for_chunk_with_surrounding_context(
-                            content=content_with_head,
-                            model=model,
-                            ga_pair=ga_pair,
-                            logs_dir=dirs["logs"] if dirs else None,
-                            num_qa_pairs=num_qa_pairs
-                        )
-
-                        for pair in qa_pairs:
-                            qa_entry = {
-                                "genre": ga_pair['genre']['title'],
-                                "audience": ga_pair['audience']['title'],
-                                "question": pair['question'],
-                                "answer": pair['answer']
-                            }
-                            all_qa_pairs_with_ga.append(qa_entry)
-
-                        pbar.update(1)
+            if parallel and parallel >= 2:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                with ThreadPoolExecutor(max_workers=parallel) as ex:
+                    futures = [ex.submit(run_task, t) for t in tasks]
+                    for fut in as_completed(futures):
+                        try:
+                            res = fut.result()
+                            all_qa_pairs_with_ga.extend(res)
+                        finally:
+                            pbar.update(1)
             else:
-                for chunk in iterable_outer:
-                    for ga_pair in ga_pairs:
-                        if use_thinking:
-                            qa_pairs = generate_qa_for_chunk_with_ga_and_thinking(
-                                chunk=chunk,
-                                full_text=text if use_fulltext else "",
-                                model=model,
-                                ga_pair=ga_pair,
-                                logs_dir=dirs["logs"] if dirs else None,
-                                num_qa_pairs=num_qa_pairs
-                            )
-                        elif use_fulltext:
-                            qa_pairs = generate_qa_for_chunk_with_ga_and_fulltext(
-                                chunk=chunk,
-                                full_text=text,
-                                model=model,
-                                ga_pair=ga_pair,
-                                logs_dir=dirs["logs"] if dirs else None,
-                                num_qa_pairs=num_qa_pairs
-                            )
-                        else:
-                            qa_pairs = generate_qa_for_chunk_with_ga(
-                                chunk, model=model, ga_pair=ga_pair,
-                                logs_dir=dirs["logs"] if dirs else None,
-                                num_qa_pairs=num_qa_pairs
-                            )
-
-                        for pair in qa_pairs:
-                            qa_entry = {
-                                "genre": ga_pair['genre']['title'],
-                                "audience": ga_pair['audience']['title'],
-                                "question": pair['question'],
-                                "answer": pair['answer']  # <think>...</think>回答...形式がそのまま入る
-                            }
-                            all_qa_pairs_with_ga.append(qa_entry)
-
-                        pbar.update(1)
+                for t in tasks:
+                    res = run_task(t)
+                    all_qa_pairs_with_ga.extend(res)
+                    pbar.update(1)
 
         generation_summary = Panel(
             f"✨ [bold green]{len(all_qa_pairs_with_ga)}[/bold green] 個のQ&Aペアを生成完了！",
