@@ -209,3 +209,11 @@ __marimo__/
 uv.lock
 example/output/structured/logs/
 example/output/
+
+test_output/
+logs.txt
+
+example/input/toho/
+
+output/
+memo.md

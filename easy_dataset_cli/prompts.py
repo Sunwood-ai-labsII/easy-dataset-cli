@@ -7,7 +7,15 @@ from pathlib import Path
 def load_prompt_template(template_name: str) -> str:
     """プロンプトテンプレートをマークダウンファイルから読み込む"""
     prompt_dir = Path(__file__).parent / "prompts"
-    template_path = prompt_dir / f"{template_name}.md"
+    
+    # GA系プロンプトかQA系プロンプトかを判定
+    if template_name.startswith("ga_"):
+        template_path = prompt_dir / "ga" / f"{template_name}.md"
+    elif template_name.startswith("qa_"):
+        template_path = prompt_dir / "qa" / f"{template_name}.md"
+    else:
+        # 従来の形式も保持
+        template_path = prompt_dir / f"{template_name}.md"
     
     if not template_path.exists():
         raise FileNotFoundError(f"プロンプトテンプレートが見つかりません: {template_path}")
@@ -33,3 +41,8 @@ def get_ga_definition_generation_prompt() -> str:
 def get_qa_generation_with_thinking_prompt() -> str:
     """思考フロー対応Q&A生成プロンプトを取得"""
     return load_prompt_template("qa_generation_with_thinking")
+
+
+def get_qa_generation_with_surrounding_prompt() -> str:
+    """周辺チャンク付Q&A生成プロンプトを取得"""
+    return load_prompt_template("qa_generation_with_surrounding")

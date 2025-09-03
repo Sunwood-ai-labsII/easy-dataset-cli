@@ -1,23 +1,41 @@
 [project]
 name = "easy-dataset-cli"
-version = "1.0.0"
+version = "1.1.0"
 description = "A simple CLI tool to generate QA pairs from a text file using LLMs and GA pairs, outputting genre-specific XML files."
 requires-python = ">=3.9"
 dependencies = [
     "typer",               # CLIフレームワーク
     "rich",                # リッチなコンソール出力
-    "litellm",             # LLM連携ライブラリ
+    "art",                 # ASCII art generation
+    "openai",              # OpenAI API連携ライブラリ
     "langchain-text-splitters", # テキスト分割用
     "mistune",             # マークダウン解析用ライブラリ
     "python-dotenv",       # .env ファイル読み込み用
     "huggingface-hub",     # Hugging Face Hub API
-    "datasets"             # Hugging Face Datasets
+    "datasets",            # Hugging Face Datasets
+    "tqdm"                 # プログレスバー表示
 ]
 
 [project.scripts]
-# "easy-dataset" コマンドで "easy_dataset_cli.main:app" を実行するよう設定
-easy-dataset = "easy_dataset_cli.main:app"
+# "easy-dataset" コマンドで "easy_dataset_cli.main:main" を実行するよう設定
+easy-dataset = "easy_dataset_cli.main:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+# Limit package discovery to our library only to avoid
+# accidental inclusion of folders like `output/` or `test_output/`.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["easy_dataset_cli*"]
+exclude = [
+  "tests*",
+  "test_*",
+  "docs*",
+  "example*",
+  "examples*",
+  "output*",
+  "test_output*",
+  ".SourceSage*"
+]

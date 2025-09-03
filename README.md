@@ -33,6 +33,10 @@
 - **🤗 HF統合**: Hugging Face Hubへの直接アップロード機能
 - **📊 データセットカード**: 自動的なREADME.md生成でデータセット情報を整理
 - **🔄 変換機能**: 既存XMLファイルからAlpaca形式への変換コマンド
+- **🔍 自動GA検出**: バッチ処理時に各ファイルに対応するGA定義を自動検出
+- **📁 バッチ処理強化**: 複数ファイルの同時処理と個別出力対応
+- **🌐 周辺コンテキストモード**: チャンク前後のチャンクをコンテキストとして活用し、文脈理解を向上
+- **📌 ドキュメント冒頭活用**: 周辺コンテキスト使用時、ドキュメントの冒頭3000文字を常に付与して文脈の安定性を向上
 
 ## 📦 インストール
 
@@ -56,14 +60,34 @@ pip install -e .
 # 環境変数にAPIキーを設定
 export OPENAI_API_KEY="your-api-key-here"
 
-# 元の文章からGAペア定義を自動生成
-uv run easy-dataset create-ga .\example\input\documents\sample_document.txt --output-dir .\example\output\sample_document --num-ga-pairs 10
+# 元の文章からGAペア定義を自動生成（デフォルト: 8000文字まで使用）
+uv run easy-dataset create-ga ./example/input/documents/sample_document.txt --output-dir ./example/output/sample_document --num-ga-pairs 2
+
+# より大きなファイルの場合、コンテキストを制限して処理時間を短くする
+uv run easy-dataset create-ga ./large_document.txt --output-dir ./output --num-ga-pairs 3 --max-context-length 4000
+
+# フォルダ内の全ファイルに対してGAペアをバッチ生成
+uv run easy-dataset create-ga ./example/input/documents/ --output-dir ./example/output/batch_ga_output --num-ga-pairs 2 --max-context-length 6000
 ```
 
 2. **Q&Aペアの生成**
+
+#### 単一ファイルの場合
 ```bash
 # GAペア定義を使ってQ&Aペアを生成
-uv run easy-dataset generate .\example\input\documents\sample_document.txt --ga-file .\example\output\sample_document\ga\ga_definitions.xml --output-dir .\example\output\sample_document\ --chunk-size 500
+uv run easy-dataset generate ./example/input/documents/sample_document.txt --ga-file ./example/output/sample_document/ga/ga_definitions.xml --output-dir ./example/output/sample_document/ --chunk-size 2000
+```
+
+#### 複数ファイル（バッチ処理）の場合
+```bash
+# 複数のテキストファイルをバッチ処理
+uv run easy-dataset generate ./example/input/documents/ --ga-file ./example/output/sample_document/ga/ga_definitions.xml --output-dir ./example/output/batch_output/ --chunk-size 2000 --use-surrounding-context 
+```
+
+#### 自動GA検出機能を使用したバッチ処理
+```bash
+# 各ファイルに対応するGA定義を自動検出してバッチ処理
+uv run easy-dataset generate ./example/input/documents/ --ga-base-dir ./example/output/batch_ga_output/ --output-dir ./example/output/batch_qa_output/ --chunk-size 2000 --use-surrounding-context 
 ```
 
 ### 🦙 Alpaca形式とHugging Face連携の使用例
@@ -91,6 +115,14 @@ uv run easy-dataset generate .\example\input\documents\sample_document.txt \
   --output-dir .\example\output\sample_document\ \
   --use-thinking \
   --use-fulltext
+
+# 周辺チャンクモードを使ったQ&A生成
+uv run easy-dataset generate .\example\input\documents\sample_document.txt \
+  --ga-file .\example\output\sample_document\ga\ga_definitions.xml \
+  --output-dir .\example\output\sample_document\ \
+  --use-surrounding-context \
+  --context-before 1 \
+  --context-after 2
 ```
 
 #### Hugging Face Hubへの直接アップロード
@@ -124,13 +156,14 @@ uv run easy-dataset convert-to-alpaca .\example\output\sample_document\qa \
 uv run easy-dataset create-ga [OPTIONS] FILE_PATH
 
 Arguments:
-  FILE_PATH  GAペアの定義を生成するための元のテキストファイル [required]
+  FILE_PATH  GAペアの定義を生成するための元のテキストファイルまたはフォルダ [required]
 
 Options:
-  -o, --output-dir DIRECTORY  生成されたGAペア定義ファイルを保存するディレクトリ [required]
-  -m, --model TEXT           GAペア定義の生成に使用するLLMモデル名 [default: openrouter/openai/gpt-4o]
-  -g, --num-ga-pairs INTEGER 生成するGAペアの数。指定しない場合はLLMが適切な数を決定します
-  -h, --help                 Show this message and exit
+  -o, --output-dir DIRECTORY        生成されたGAペア定義ファイルを保存するディレクトリ [required]
+  -m, --model TEXT                 GAペア定義の生成に使用するLLMモデル名 [default: openrouter/openai/gpt-oss-120b]
+  -g, --num-ga-pairs INTEGER       生成するGAペアの数。指定しない場合はLLMが適切な数を決定します
+  -l, --max-context-length INTEGER GA生成時にLLMに渡すコンテキストの最大文字数[default: 8000]
+  -h, --help                       Show this message and exit
 ```
 
 #### 🔧 generate コマンド
@@ -141,14 +174,99 @@ Arguments:
   FILE_PATH  元のテキストファイルへのパス [required]
 
 Options:
-  --ga-file PATH           Genre-Audienceペアを定義したXMLファイル [required]
+  --ga-file PATH           Genre-Audienceペアを定義したXMLファイル。バッチ処理で全ファイルに共通の定義を適用する場合に使用します。
+  --ga-base-dir PATH       GA定義フォルダの親ディレクトリ。バッチ処理時に各入力ファイルに対応するGA定義を自動検出する場合に使用します。
   -o, --output-dir PATH    XMLファイルの出力ディレクトリ
   -m, --model TEXT         Q&Aペアの生成に使用するLLMモデル [default: openrouter/openai/gpt-4o]
   --chunk-size INTEGER     テキストチャンクの最大サイズ [default: 2000]
   --chunk-overlap INTEGER  チャンク間のオーバーラップサイズ [default: 200]
   -f, --use-fulltext       全文をコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。
   -T, --use-thinking       各Q&Aペアに思考プロセスを追加して生成します。より深い理解と説明が可能になりますが、処理時間とコストが増加します。
+  -S, --use-surrounding-context 各チャンクの前後チャンクをコンテキストとして含めてQA生成を行います。より文脈を理解したQAが生成されますが、処理時間とコストが増加します。
+  --context-before INTEGER 周辺コンテキストとして含める前方チャンク数 [default: 1]
+  --context-after INTEGER  周辺コンテキストとして含める後方チャンク数 [default: 1]
   -h, --help               Show this message and exit
+```
+
+#### 🔗 周辺コンテキストモード（`--use-surrounding-context`オプション）
+
+`--use-surrounding-context`オプションを使用すると、各チャンクの前後チャンクをコンテキストとして含めることで、より文脈を理解した高品質なQ&Aペアを生成できます。`--use-fulltext`よりも処理コストが低く抑えられます。
+
+- **`--context-before INTEGER`**: 前方のコンテキストとして含めるチャンク数（デフォルト: 1）
+- **`--context-after INTEGER`**: 後方のコンテキストとして含めるチャンク数（デフォルト: 1）
+
+追加の仕様（v0.2.x以降）:
+- **ドキュメント冒頭を自動付与**: 周辺コンテキストモード有効時は、各プロンプトの先頭にドキュメントの冒頭3000文字が自動的に付与されます。
+  - 目的: 各チャンクの前後だけでは文脈が曖昧になるケースを防ぎ、全体のトピックや用語の基調を共有するため
+  - 上限: 3000文字（固定）
+  - コスト: プロンプト長が増えるため、わずかにトークン消費が増加します
+
+**使用例:**
+```bash
+# 各チャンクの前後1チャンクずつをコンテキストとして使用
+uv run easy-dataset generate document.txt \
+  --ga-file ga_definitions.xml \
+  --use-surrounding-context
+
+# 前2チャンク、後1チャンクをコンテキストとして使用
+uv run easy-dataset generate document.txt \
+  --ga-file ga_definitions.xml \
+  --use-surrounding-context \
+  --context-before 2 \
+  --context-after 1
+```
+
+このモードは、長いドキュメントにおいて各チャンクの意味を理解するのに役立ち、トークンサイズ制限を回避しつつ文脈理解を向上させます。
+加えて、ドキュメント冒頭（最大3000文字）を毎回付与することで、用語や話題の基調が共有され、質問・回答の一貫性が高まります。
+
+#### 📝 GA定義ファイルの自動検出機能
+
+`--ga-base-dir`オプションを使用すると、バッチ処理時に各入力ファイルに対応するGA定義ファイルを自動的に検出して使用します。
+
+**動作仕様:**
+- 入力ディレクトリ内の各テキストファイル（例: `doc_A.txt`）の名前を取得
+- `--ga-base-dir`で指定されたパスとファイル名を組み合わせて対応するGA定義ファイルのパスを自動生成（例: `<ga-base-dir>/doc_A/ga/ga_definitions.xml`）
+- そのGA定義ファイルを使って該当ファイルのQ&A生成を行う
+- 入力ディレクトリ内のすべてのファイルに対して上記処理を繰り返す
+
+**使用例:**
+```bash
+# 各ファイルに対応するGA定義を自動検出してバッチ処理
+uv run easy-dataset generate ./example/input/documents/ \
+  --ga-base-dir ./example/output/batch_ga_output/ \
+  --output-dir ./example/output/batch_qa_output/
+```
+
+**ディレクトリ構造の例:**
+```
+example/
+├── input/documents/
+│   ├── doc_A.txt
+│   ├── doc_B.txt
+│   └── doc_C.txt
+├── output/batch_ga_output/
+│   ├── doc_A/
+│   │   └── ga/
+│   │       └── ga_definitions.xml
+│   ├── doc_B/
+│   │   └── ga/
+│   │       └── ga_definitions.xml
+│   └── doc_C/
+│       └── ga/
+│           └── ga_definitions.xml
+└── output/batch_qa_output/
+    ├── doc_A/
+    │   ├── ga/
+    │   ├── logs/
+    │   └── qa/
+    ├── doc_B/
+    │   ├── ga/
+    │   ├── logs/
+    │   └── qa/
+    └── doc_C/
+        ├── ga/
+        ├── logs/
+        └── qa/
 ```
 
 ## 📄 GA定義ファイルの形式
@@ -227,6 +345,8 @@ Alpaca形式で出力する際、以下の情報を含むREADME.mdが自動生�
 
 ### 📁 生成されるファイル構造
 
+#### 単一ファイル処理の場合
+
 ```
 output_directory/
 ├── ga/
@@ -242,6 +362,59 @@ output_directory/
 │   └── raw.md                      # LLMの生レスポンス
 ├── dataset_alpaca.json             # 🦙 Alpaca形式のデータセット（--export-alpacaオプション使用時）
 └── README.md                       # 📊 データセットカード（--export-alpacaオプション使用時）
+```
+
+#### バッチ処理の場合（--ga-fileオプション使用）
+
+```
+output_directory/
+├── doc_A/                          # 各入力ファイル用フォルダ
+│   ├── ga/
+│   ├── qa/
+│   ├── logs/
+│   ├── dataset_alpaca.json         # Alpaca形式（--export-alpaca使用時）
+│   └── README.md                   # データセットカード（--export-alpaca使用時）
+├── doc_B/
+│   ├── ga/
+│   ├── qa/
+│   ├── logs/
+│   ├── dataset_alpaca.json
+│   └── README.md
+└── doc_C/
+    ├── ga/
+    ├── qa/
+    ├── logs/
+    ├── dataset_alpaca.json
+    └── README.md
+```
+
+#### バッチ処理の場合（--ga-base-dirオプション使用）
+
+```
+output_directory/
+├── doc_A/                          # 各入力ファイル用フォルダ
+│   ├── ga/                         # 空のフォルダ（GA定義は自動検出）
+│   ├── qa/
+│   ├── logs/
+│   ├── dataset_alpaca.json         # Alpaca形式（--export-alpaca使用時）
+│   └── README.md                   # データセットカード（--export-alpaca使用時）
+├── doc_B/
+│   ├── ga/
+│   ├── qa/
+│   ├── logs/
+│   ├── dataset_alpaca.json
+│   └── README.md
+└── doc_C/
+    ├── ga/
+    ├── qa/
+    ├── logs/
+    ├── dataset_alpaca.json
+    └── README.md
+
+# GA定義ファイルは以下のパスから自動検出されます
+# <ga-base-dir>/doc_A/ga/ga_definitions.xml
+# <ga-base-dir>/doc_B/ga/ga_definitions.xml
+# <ga-base-dir>/doc_C/ga/ga_definitions.xml
 ```
 
 ## 🤖 サポートするLLMモデル
@@ -355,4 +528,3 @@ MIT License
 
 ### 📄 参考論文
 - **[Dataset Generation for Instruction Tuning](https://arxiv.org/html/2507.04009v1)**
-
